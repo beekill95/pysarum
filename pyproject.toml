@@ -17,3 +17,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.pdm]
 distribution = true
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.1.0",
+]

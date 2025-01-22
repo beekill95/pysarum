@@ -1,2 +1,2 @@
 # pysarum
-Python implementation of slime mold simulation 
+Python implementation of slime mold simulation
