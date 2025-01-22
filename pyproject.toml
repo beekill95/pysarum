@@ -1,0 +1,19 @@
+[project]
+name = "pysarum"
+version = "0.1.0"
+description = "Python implementation of slime mold simulation"
+authors = [
+    {name = "beekill", email = "nguyenmbquan95@gmail.com"},
+]
+dependencies = ["raylib>=5.5.0.2"]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pdm]
+distribution = true
