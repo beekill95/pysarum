@@ -8,6 +8,11 @@ import numpy as np
 import pyray as pr
 
 AGENT_SPEED = 50.0
+EVAPORATION_SPEED = 0.1
+DIFFUSION_RADIUS = 5
+DIFFUSION_KERNEL = np.ones((DIFFUSION_RADIUS, DIFFUSION_RADIUS), dtype=np.float32) / (
+    DIFFUSION_RADIUS * DIFFUSION_RADIUS
+)
 
 
 @dataclass(slots=True)
@@ -48,7 +53,7 @@ class Agent:
                 y = int(self.y + i * delta_y)
 
                 # TODO: how to remove this check?
-                if 0 <= x < width and 0 <= y < height:
+                if (0 <= x < width) and (0 <= y < height):
                     pheromone_trail[x, y] = 1.0
 
         # Update the self's position.
@@ -69,12 +74,38 @@ def create_random_agent(world_width: int, world_height: int):
     )
 
 
+def evaporate_pheromone(pheromone_trail: np.ndarray, dt: float):
+    return np.maximum(pheromone_trail - dt * EVAPORATION_SPEED, 0.0)
+
+
+def diffuse_pheromone(pheromone_trail: np.ndarray):
+    # Basically applying convolution 2d on the pheromone trail.
+    # Implementation copied from https://stackoverflow.com/a/54977551
+    from numpy.fft import fft2, ifft2, ifftshift
+
+    img = pheromone_trail
+    kernel = DIFFUSION_KERNEL
+
+    sz = (
+        img.shape[0] - kernel.shape[0],
+        img.shape[1] - kernel.shape[1],
+    )  # total amount of padding
+    kernel = np.pad(
+        kernel,
+        (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
+        "constant",
+    )
+    kernel = ifftshift(kernel)
+
+    return np.real(ifft2(fft2(img) * fft2(kernel)))
+
+
 def run(width: int, height: int, nb_agents: int, seed: int = 0):
     random.seed(seed)
     pr.init_window(width, height, "Pysarum")
 
     agents = [create_random_agent(width, height) for _ in range(nb_agents)]
-    pheromone_trail = np.zeros((width, height), dtype=np.float32)
+    pheromone_trail = np.zeros((height, width), dtype=np.float32)
     pheromone_texture = None
 
     while not pr.window_should_close():
@@ -82,6 +113,9 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
         dt = pr.get_frame_time()
         for agent in agents:
             agent.move(dt, pheromone_trail, width, height)
+
+        pheromone_trail = evaporate_pheromone(pheromone_trail, dt)
+        pheromone_trail = diffuse_pheromone(pheromone_trail)
 
         # Convert the pheromone trail into image.
         pheromone_image = pr.Image(
