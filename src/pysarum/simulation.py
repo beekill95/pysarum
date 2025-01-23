@@ -19,8 +19,7 @@ DIFFUSION_KERNEL = np.ones((DIFFUSION_RADIUS, DIFFUSION_RADIUS), dtype=np.float3
 class Agent:
     x: float
     y: float
-    velocity_x: float
-    velocity_y: float
+    direction: float
 
     @property
     def int_x(self):
@@ -30,17 +29,27 @@ class Agent:
     def int_y(self):
         return int(self.y)
 
+    def velocity_x(self):
+        return math.cos(self.direction) * AGENT_SPEED
+
+    def velocity_y(self):
+        return math.sin(self.direction) * AGENT_SPEED
+
     def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
-        new_x = self.x + self.velocity_x * dt
-        new_y = self.y + self.velocity_y * dt
+        new_x = self.x + self.velocity_x() * dt
+        new_y = self.y + self.velocity_y() * dt
 
         if new_x >= width or new_x <= 0:
-            self.velocity_x = -self.velocity_x
             new_x = 0 if new_x < 0 else width
+            self.direction = math.pi - self.direction
+
+            # self.velocity_x = -self.velocity_x
+            # Choose random angle instead of just moving in the opposite direction.
+            # angle = random.random() * math.pi
 
         if new_y >= height or new_y <= 0:
-            self.velocity_y = -self.velocity_y
             new_y = 0 if new_y < 0 else height
+            self.direction = -self.direction
 
         # Mark the trail with pheromone.
         # TODO: is there a way to do this efficiently?
@@ -54,7 +63,7 @@ class Agent:
 
                 # TODO: how to remove this check?
                 if (0 <= x < width) and (0 <= y < height):
-                    pheromone_trail[x, y] = 1.0
+                    pheromone_trail[y, x] = 1.0
 
         # Update the self's position.
         self.x = new_x
@@ -69,8 +78,7 @@ def create_random_agent(world_width: int, world_height: int):
         # random.randint(0, world_height),
         world_width / 2,
         world_height / 2,
-        AGENT_SPEED * math.cos(angle),
-        AGENT_SPEED * math.sin(angle),
+        angle,
     )
 
 
