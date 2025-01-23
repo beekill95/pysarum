@@ -4,7 +4,7 @@ from .simulation import run
 
 
 def main() -> int:
-    run(800, 800, 100, 5)
+    run(800, 800, 1000, 5)
     return 0
 
 

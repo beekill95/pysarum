@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import array
 import math
 import random
 from dataclasses import dataclass
 
+import numpy as np
 import pyray as pr
 
 AGENT_SPEED = 50.0
@@ -25,7 +25,7 @@ class Agent:
     def int_y(self):
         return int(self.y)
 
-    def move(self, dt: float, pheromone_trail: array.array, width: int, height: int):
+    def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
         new_x = self.x + self.velocity_x * dt
         new_y = self.y + self.velocity_y * dt
 
@@ -46,9 +46,10 @@ class Agent:
             for i in range(nb_steps):
                 x = int(self.x + i * delta_x)
                 y = int(self.y + i * delta_y)
-                pos = y * width + x
-                if pos < width * height:
-                    pheromone_trail[pos] = 255
+
+                # TODO: how to remove this check?
+                if 0 <= x < width and 0 <= y < height:
+                    pheromone_trail[x, y] = 1.0
 
         # Update the self's position.
         self.x = new_x
@@ -73,7 +74,7 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
     pr.init_window(width, height, "Pysarum")
 
     agents = [create_random_agent(width, height) for _ in range(nb_agents)]
-    pheromone_trail = array.array("B", [0] * width * height)
+    pheromone_trail = np.zeros((width, height), dtype=np.float32)
     pheromone_texture = None
 
     while not pr.window_should_close():
@@ -84,7 +85,7 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
 
         # Convert the pheromone trail into image.
         pheromone_image = pr.Image(
-            pheromone_trail,
+            (pheromone_trail.flatten() * 255).astype(np.uint8),
             width,
             height,
             1,
