@@ -41,15 +41,19 @@ class Agent:
 
         if new_x >= width or new_x <= 0:
             new_x = 0 if new_x < 0 else width
-            self.direction = math.pi - self.direction
 
-            # self.velocity_x = -self.velocity_x
             # Choose random angle instead of just moving in the opposite direction.
-            # angle = random.random() * math.pi
+            angle = random.random() * math.pi
+            self.direction = (
+                (angle - math.pi / 2) if new_x <= 0 else (angle + math.pi / 2)
+            )
 
         if new_y >= height or new_y <= 0:
             new_y = 0 if new_y < 0 else height
-            self.direction = -self.direction
+
+            # Choose random angle instead of just moving in the opposite direction.
+            angle = random.random() * math.pi
+            self.direction = angle if new_y <= 0 else (angle + math.pi)
 
         # Mark the trail with pheromone.
         # TODO: is there a way to do this efficiently?
