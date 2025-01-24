@@ -13,6 +13,10 @@ DIFFUSION_RADIUS = 5
 DIFFUSION_KERNEL = np.ones((DIFFUSION_RADIUS, DIFFUSION_RADIUS), dtype=np.float32) / (
     DIFFUSION_RADIUS * DIFFUSION_RADIUS
 )
+SENSOR_SIZE = 3
+SENSOR_DISTANCE = 7
+SENSOR_ANGLE = math.pi / 4
+DIRECTION_ANGLE = math.pi / 6
 
 
 @dataclass(slots=True)
@@ -36,6 +40,8 @@ class Agent:
         return math.sin(self.direction) * AGENT_SPEED
 
     def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
+        self._steer_direction(pheromone_trail)
+
         new_x = self.x + self.velocity_x() * dt
         new_y = self.y + self.velocity_y() * dt
 
@@ -72,6 +78,41 @@ class Agent:
         # Update the self's position.
         self.x = new_x
         self.y = new_y
+
+    def _steer_direction(self, pheromone_trail: np.ndarray):
+        left_sensor = self._sense(pheromone_trail, self.direction + SENSOR_ANGLE)
+        front_sensor = self._sense(pheromone_trail, self.direction)
+        right_sensor = self._sense(pheromone_trail, self.direction - SENSOR_ANGLE)
+
+        if front_sensor < min(left_sensor, right_sensor):
+            # Rotate randomly.
+            self.direction = random.choice(
+                [self.direction + DIRECTION_ANGLE, self.direction - DIRECTION_ANGLE]
+            )
+        elif front_sensor < left_sensor:
+            self.direction += DIRECTION_ANGLE
+        elif front_sensor < right_sensor:
+            self.direction -= DIRECTION_ANGLE
+
+        # Otherwise, keep the current direction.
+
+    def _sense(self, pheromone_trail: np.ndarray, sensor_direction: float):
+        sensor_pos_x = self.x + math.cos(sensor_direction) * SENSOR_DISTANCE
+        sensor_pos_y = self.y + math.sin(sensor_direction) * SENSOR_DISTANCE
+
+        height, width = pheromone_trail.shape
+
+        xs, ys = sensor_pos_x - SENSOR_SIZE // 2, sensor_pos_y - SENSOR_SIZE // 2
+        xe, ye = xs + SENSOR_SIZE, ys + SENSOR_SIZE
+
+        if (xe <= 0) or (ye <= 0) or (xs >= width) or (ys >= height):
+            return -math.inf
+
+        # FIXME: this still result into an empty slices.
+        return pheromone_trail[
+            max(int(ys), 0) : min(int(ye), height),
+            max(int(xs), 0) : min(int(xe), width),
+        ].mean()
 
 
 def create_random_agent(world_width: int, world_height: int):
@@ -147,8 +188,8 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
         # pr.draw_text("Hello, Physarum Polycephalum", 190, 200, 20, pr.VIOLET)
         pr.draw_texture(pheromone_texture, 0, 0, pr.WHITE)
 
-        for agent in agents:
-            pr.draw_pixel(agent.int_x, agent.int_y, pr.RED)
+        # for agent in agents:
+        #     pr.draw_pixel(agent.int_x, agent.int_y, pr.RED)
 
         pr.end_drawing()
 
