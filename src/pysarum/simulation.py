@@ -109,10 +109,16 @@ class Agent:
             return -math.inf
 
         # FIXME: this still result into an empty slices.
-        return pheromone_trail[
-            max(int(ys), 0) : min(int(ye), height),
-            max(int(xs), 0) : min(int(xe), width),
-        ].mean()
+        pheromones = (
+            pheromone_trail[
+                max(int(ys), 0) : min(int(ye), height),
+                max(int(xs), 0) : min(int(xe), width),
+            ]
+            .flatten()
+            .tolist()
+        )
+
+        return sum(pheromones) / len(pheromones) if len(pheromones) else -math.inf
 
 
 def create_random_agent(world_width: int, world_height: int):
