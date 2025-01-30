@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import math
 import random
 from dataclasses import dataclass
@@ -7,16 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 import pyray as pr
 
-AGENT_SPEED = 50.0
-EVAPORATION_SPEED = 0.1
-DIFFUSION_RADIUS = 5
-DIFFUSION_KERNEL = np.ones((DIFFUSION_RADIUS, DIFFUSION_RADIUS), dtype=np.float32) / (
-    DIFFUSION_RADIUS * DIFFUSION_RADIUS
-)
-SENSOR_SIZE = 3
-SENSOR_DISTANCE = 7
-SENSOR_ANGLE = math.pi / 4
-DIRECTION_ANGLE = math.pi / 6
+from . import config
 
 
 @dataclass(slots=True)
@@ -34,10 +26,10 @@ class Agent:
         return int(self.y)
 
     def velocity_x(self):
-        return math.cos(self.direction) * AGENT_SPEED
+        return math.cos(self.direction) * config.AGENT_SPEED
 
     def velocity_y(self):
-        return math.sin(self.direction) * AGENT_SPEED
+        return math.sin(self.direction) * config.AGENT_SPEED
 
     def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
         self._steer_direction(pheromone_trail)
@@ -80,30 +72,38 @@ class Agent:
         self.y = new_y
 
     def _steer_direction(self, pheromone_trail: np.ndarray):
-        left_sensor = self._sense(pheromone_trail, self.direction + SENSOR_ANGLE)
+        left_sensor = self._sense(pheromone_trail, self.direction + config.SENSOR_ANGLE)
         front_sensor = self._sense(pheromone_trail, self.direction)
-        right_sensor = self._sense(pheromone_trail, self.direction - SENSOR_ANGLE)
+        right_sensor = self._sense(
+            pheromone_trail, self.direction - config.SENSOR_ANGLE
+        )
 
         if front_sensor < min(left_sensor, right_sensor):
             # Rotate randomly.
             self.direction = random.choice(
-                [self.direction + DIRECTION_ANGLE, self.direction - DIRECTION_ANGLE]
+                [
+                    self.direction + config.DIRECTION_ANGLE,
+                    self.direction - config.DIRECTION_ANGLE,
+                ]
             )
         elif front_sensor < left_sensor:
-            self.direction += DIRECTION_ANGLE
+            self.direction += config.DIRECTION_ANGLE
         elif front_sensor < right_sensor:
-            self.direction -= DIRECTION_ANGLE
+            self.direction -= config.DIRECTION_ANGLE
 
         # Otherwise, keep the current direction.
 
     def _sense(self, pheromone_trail: np.ndarray, sensor_direction: float):
-        sensor_pos_x = self.x + math.cos(sensor_direction) * SENSOR_DISTANCE
-        sensor_pos_y = self.y + math.sin(sensor_direction) * SENSOR_DISTANCE
+        sensor_pos_x = self.x + math.cos(sensor_direction) * config.SENSOR_DISTANCE
+        sensor_pos_y = self.y + math.sin(sensor_direction) * config.SENSOR_DISTANCE
 
         height, width = pheromone_trail.shape
 
-        xs, ys = sensor_pos_x - SENSOR_SIZE // 2, sensor_pos_y - SENSOR_SIZE // 2
-        xe, ye = xs + SENSOR_SIZE, ys + SENSOR_SIZE
+        xs, ys = (
+            sensor_pos_x - config.SENSOR_SIZE // 2,
+            sensor_pos_y - config.SENSOR_SIZE // 2,
+        )
+        xe, ye = xs + config.SENSOR_SIZE, ys + config.SENSOR_SIZE
 
         if (xe <= 0) or (ye <= 0) or (xs >= width) or (ys >= height):
             return -math.inf
@@ -134,7 +134,7 @@ def create_random_agent(world_width: int, world_height: int):
 
 
 def evaporate_pheromone(pheromone_trail: np.ndarray, dt: float):
-    return np.maximum(pheromone_trail - dt * EVAPORATION_SPEED, 0.0)
+    return np.maximum(pheromone_trail - dt * config.EVAPORATION_SPEED, 0.0)
 
 
 def diffuse_pheromone(pheromone_trail: np.ndarray):
@@ -143,7 +143,7 @@ def diffuse_pheromone(pheromone_trail: np.ndarray):
     from numpy.fft import fft2, ifft2, ifftshift
 
     img = pheromone_trail
-    kernel = DIFFUSION_KERNEL
+    kernel = config.DIFFUSION_KERNEL
 
     sz = (
         img.shape[0] - kernel.shape[0],
@@ -159,19 +159,26 @@ def diffuse_pheromone(pheromone_trail: np.ndarray):
     return np.real(ifft2(fft2(img) * fft2(kernel)))
 
 
-def run(width: int, height: int, nb_agents: int, seed: int = 0):
-    random.seed(seed)
-    pr.init_window(width, height, "Pysarum")
+def run(nb_agents: int, seed: int = 0):
+    sim_width = 800
+    sim_height = 800
 
-    agents = [create_random_agent(width, height) for _ in range(nb_agents)]
-    pheromone_trail = np.zeros((height, width), dtype=np.float32)
+    random.seed(seed)
+
+    pr.init_window(sim_width, sim_height, "Pysarum")
+
+    agents = [create_random_agent(sim_width, sim_height) for _ in range(nb_agents)]
+    pheromone_trail = np.zeros((sim_height, sim_width), dtype=np.float32)
     pheromone_texture = None
 
     while not pr.window_should_close():
+        # Reload config.
+        importlib.reload(config)
+
         # Update agents position, and also mark the pheromone.
         dt = pr.get_frame_time()
         for agent in agents:
-            agent.move(dt, pheromone_trail, width, height)
+            agent.move(dt, pheromone_trail, sim_width, sim_height)
 
         pheromone_trail = evaporate_pheromone(pheromone_trail, dt)
         pheromone_trail = diffuse_pheromone(pheromone_trail)
@@ -179,8 +186,8 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
         # Convert the pheromone trail into image.
         pheromone_image = pr.Image(
             (pheromone_trail.flatten() * 255).astype(np.uint8),
-            width,
-            height,
+            sim_width,
+            sim_height,
             1,
             pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
         )
@@ -193,6 +200,8 @@ def run(width: int, height: int, nb_agents: int, seed: int = 0):
         pr.clear_background(pr.BLACK)
         # pr.draw_text("Hello, Physarum Polycephalum", 190, 200, 20, pr.VIOLET)
         pr.draw_texture(pheromone_texture, 0, 0, pr.WHITE)
+
+        # Draw GUI.
 
         # for agent in agents:
         #     pr.draw_pixel(agent.int_x, agent.int_y, pr.RED)
