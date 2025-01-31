@@ -16,6 +16,7 @@ class Agent:
     x: float
     y: float
     direction: float
+    # species: int
 
     @property
     def int_x(self):
