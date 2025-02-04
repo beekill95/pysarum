@@ -8,7 +8,7 @@ import numpy as np
 
 class Species(NamedTuple):
     speed: float
-    direction: float
+    turn_angle: float
 
     sensor_size: int
     sensor_distance: int
@@ -33,14 +33,14 @@ DIRECTION_ANGLE = math.pi / 3
 SPECIES = (
     Species(
         speed=AGENT_SPEED,
-        direction=DIRECTION_ANGLE,
+        turn_angle=DIRECTION_ANGLE,
         sensor_size=SENSOR_SIZE,
         sensor_distance=SENSOR_DISTANCE,
         sensor_angle=SENSOR_ANGLE,
     ),
     Species(
         speed=AGENT_SPEED,
-        direction=DIRECTION_ANGLE,
+        turn_angle=DIRECTION_ANGLE,
         sensor_size=SENSOR_SIZE,
         sensor_distance=SENSOR_DISTANCE,
         sensor_angle=SENSOR_ANGLE,

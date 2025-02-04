@@ -16,7 +16,7 @@ class Agent:
     x: float
     y: float
     direction: float
-    # species: int
+    species_: int
 
     @property
     def int_x(self):
@@ -26,11 +26,15 @@ class Agent:
     def int_y(self):
         return int(self.y)
 
+    @property
+    def species(self):
+        return config.SPECIES[self.species_]
+
     def velocity_x(self):
-        return math.cos(self.direction) * config.AGENT_SPEED
+        return math.cos(self.direction) * self.species.speed
 
     def velocity_y(self):
-        return math.sin(self.direction) * config.AGENT_SPEED
+        return math.sin(self.direction) * self.species.speed
 
     def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
         self._steer_direction(pheromone_trail)
@@ -73,38 +77,42 @@ class Agent:
         self.y = new_y
 
     def _steer_direction(self, pheromone_trail: np.ndarray):
-        left_sensor = self._sense(pheromone_trail, self.direction + config.SENSOR_ANGLE)
+        species = self.species
+        left_sensor = self._sense(
+            pheromone_trail, self.direction + species.sensor_angle
+        )
         front_sensor = self._sense(pheromone_trail, self.direction)
         right_sensor = self._sense(
-            pheromone_trail, self.direction - config.SENSOR_ANGLE
+            pheromone_trail, self.direction - species.sensor_angle
         )
 
         if front_sensor < min(left_sensor, right_sensor):
             # Rotate randomly.
             self.direction = random.choice(
                 [
-                    self.direction + config.DIRECTION_ANGLE,
-                    self.direction - config.DIRECTION_ANGLE,
+                    self.direction + species.turn_angle,
+                    self.direction - species.turn_angle,
                 ]
             )
         elif front_sensor < left_sensor:
-            self.direction += config.DIRECTION_ANGLE
+            self.direction += species.turn_angle
         elif front_sensor < right_sensor:
-            self.direction -= config.DIRECTION_ANGLE
+            self.direction -= species.turn_angle
 
         # Otherwise, keep the current direction.
 
     def _sense(self, pheromone_trail: np.ndarray, sensor_direction: float):
-        sensor_pos_x = self.x + math.cos(sensor_direction) * config.SENSOR_DISTANCE
-        sensor_pos_y = self.y + math.sin(sensor_direction) * config.SENSOR_DISTANCE
+        species = self.species
+        sensor_pos_x = self.x + math.cos(sensor_direction) * species.sensor_distance
+        sensor_pos_y = self.y + math.sin(sensor_direction) * species.sensor_distance
 
         height, width = pheromone_trail.shape
 
         xs, ys = (
-            sensor_pos_x - config.SENSOR_SIZE // 2,
-            sensor_pos_y - config.SENSOR_SIZE // 2,
+            sensor_pos_x - species.sensor_size // 2,
+            sensor_pos_y - species.sensor_size // 2,
         )
-        xe, ye = xs + config.SENSOR_SIZE, ys + config.SENSOR_SIZE
+        xe, ye = xs + species.sensor_size, ys + species.sensor_size
 
         if (xe <= 0) or (ye <= 0) or (xs >= width) or (ys >= height):
             return -math.inf
