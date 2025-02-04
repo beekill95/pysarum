@@ -188,10 +188,9 @@ def run(nb_agents: int, seed: int = 0):
     pr.init_window(sim_width, sim_height, "Pysarum")
 
     agents = [create_random_agent(sim_width, sim_height) for _ in range(nb_agents)]
-    pheromone_trails = np.zeros(
-        (len(config.SPECIES), sim_height, sim_width), dtype=np.float32
-    )
-    pheromone_textures = None
+    nb_species = len(config.SPECIES)
+    pheromone_trails = np.zeros((nb_species, sim_height, sim_width), dtype=np.float32)
+    pheromone_textures: list[pr.Texture2D | None] = [None] * nb_species
 
     while not pr.window_should_close():
         # Reload config.
@@ -206,26 +205,38 @@ def run(nb_agents: int, seed: int = 0):
         pheromone_trails = diffuse_pheromone(pheromone_trails)
 
         # Convert the pheromone trail into image.
-        pheromone_images = pr.Image(
-            (pheromone_trail.flatten() * 255).astype(np.uint8),
-            sim_width,
-            sim_height,
-            1,
-            pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
-        )
-        if pheromone_textures is None:
-            pheromone_texture = pr.load_texture_from_image(pheromone_image)
-        else:
-            pr.update_texture(pheromone_texture, pheromone_image.data)
+        for i in range(nb_species):
+            pheromone_image = pr.Image(
+                (pheromone_trails[i].flatten() * 255).astype(np.uint8),
+                sim_width,
+                sim_height,
+                1,
+                pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
+            )
+            if pheromone_textures[i] is None:
+                pheromone_textures[i] = pr.load_texture_from_image(pheromone_image)
+            else:
+                pr.update_texture(pheromone_textures[i], pheromone_image.data)
 
         pr.begin_drawing()
         pr.clear_background(pr.BLACK)
         # pr.draw_text("Hello, Physarum Polycephalum", 190, 200, 20, pr.VIOLET)
-        pr.draw_texture(pheromone_texture, 0, 0, pr.WHITE)
+
+        # Draw the first texture.
+        pr.draw_texture(pheromone_textures[0], 0, 0, pr.WHITE)
+
+        # Blend multiple textures into one image.
+        pr.begin_blend_mode(pr.BlendMode.BLEND_ADD_COLORS)
+        for i in range(1, nb_species):
+            pr.draw_texture(pheromone_textures[i], 0, 0, pr.WHITE)
+        pr.end_blend_mode()
 
         pr.end_drawing()
 
-    if pheromone_texture is not None:
-        pr.unload_texture(pheromone_texture)
+    # Unload all textures.
+    for i in range(nb_species):
+        texture = pheromone_textures[i]
+        if texture is not None:
+            pr.unload_texture(texture)
 
     pr.close_window()
