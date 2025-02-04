@@ -36,7 +36,12 @@ class Agent:
     def velocity_y(self):
         return math.sin(self.direction) * self.species.speed
 
-    def move(self, dt: float, pheromone_trail: np.ndarray, width: int, height: int):
+    def move(self, dt: float, pheromone_trails: np.ndarray, width: int, height: int):
+        # pheromone_trails must be of size <nb_species, height, width>
+        assert pheromone_trails.ndim == 3
+
+        # Move the agent and drop pheromone.
+        pheromone_trail = pheromone_trails[self.species_]
         self._steer_direction(pheromone_trail)
 
         new_x = self.x + self.velocity_x() * dt
@@ -132,6 +137,7 @@ class Agent:
 
 def create_random_agent(world_width: int, world_height: int):
     angle = random.random() * 2 * math.pi
+    species = random.randint(1, len(config.SPECIES)) - 1
 
     return Agent(
         # random.randint(0, world_width),
@@ -139,24 +145,29 @@ def create_random_agent(world_width: int, world_height: int):
         world_width / 2,
         world_height / 2,
         angle,
+        species,
     )
 
 
-def evaporate_pheromone(pheromone_trail: np.ndarray, dt: float):
-    return np.maximum(pheromone_trail - dt * config.EVAPORATION_SPEED, 0.0)
+def evaporate_pheromone(pheromone_trails: np.ndarray, dt: float):
+    # Evaporate pheromone trails of different species at a fixed rate.
+    # Support both 2d and 3d pheromone trail array.
+    return np.maximum(pheromone_trails - dt * config.EVAPORATION_SPEED, 0.0)
 
 
-def diffuse_pheromone(pheromone_trail: np.ndarray):
+def diffuse_pheromone(pheromone_trails: np.ndarray):
     # Basically applying convolution 2d on the pheromone trail.
     # Implementation copied from https://stackoverflow.com/a/54977551
+    # The pheromone_trails must be of shape <nb_species, height, width>
     from numpy.fft import fft2, ifft2, ifftshift
 
-    img = pheromone_trail
+    assert pheromone_trails.ndim == 3
+    img = pheromone_trails
     kernel = config.DIFFUSION_KERNEL
 
     sz = (
-        img.shape[0] - kernel.shape[0],
-        img.shape[1] - kernel.shape[1],
+        img.shape[-1] - kernel.shape[0],
+        img.shape[-2] - kernel.shape[1],
     )  # total amount of padding
     kernel = np.pad(
         kernel,
@@ -165,7 +176,7 @@ def diffuse_pheromone(pheromone_trail: np.ndarray):
     )
     kernel = ifftshift(kernel)
 
-    return np.real(ifft2(fft2(img) * fft2(kernel)))
+    return np.real(ifft2(fft2(img) * fft2(kernel)[None, ...]))
 
 
 def run(nb_agents: int, seed: int = 0):
@@ -177,8 +188,10 @@ def run(nb_agents: int, seed: int = 0):
     pr.init_window(sim_width, sim_height, "Pysarum")
 
     agents = [create_random_agent(sim_width, sim_height) for _ in range(nb_agents)]
-    pheromone_trail = np.zeros((sim_height, sim_width), dtype=np.float32)
-    pheromone_texture = None
+    pheromone_trails = np.zeros(
+        (len(config.SPECIES), sim_height, sim_width), dtype=np.float32
+    )
+    pheromone_textures = None
 
     while not pr.window_should_close():
         # Reload config.
@@ -187,20 +200,20 @@ def run(nb_agents: int, seed: int = 0):
         # Update agents position, and also mark the pheromone.
         dt = pr.get_frame_time()
         for agent in agents:
-            agent.move(dt, pheromone_trail, sim_width, sim_height)
+            agent.move(dt, pheromone_trails, sim_width, sim_height)
 
-        pheromone_trail = evaporate_pheromone(pheromone_trail, dt)
-        pheromone_trail = diffuse_pheromone(pheromone_trail)
+        pheromone_trails = evaporate_pheromone(pheromone_trails, dt)
+        pheromone_trails = diffuse_pheromone(pheromone_trails)
 
         # Convert the pheromone trail into image.
-        pheromone_image = pr.Image(
+        pheromone_images = pr.Image(
             (pheromone_trail.flatten() * 255).astype(np.uint8),
             sim_width,
             sim_height,
             1,
             pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
         )
-        if pheromone_texture is None:
+        if pheromone_textures is None:
             pheromone_texture = pr.load_texture_from_image(pheromone_image)
         else:
             pr.update_texture(pheromone_texture, pheromone_image.data)
@@ -209,11 +222,6 @@ def run(nb_agents: int, seed: int = 0):
         pr.clear_background(pr.BLACK)
         # pr.draw_text("Hello, Physarum Polycephalum", 190, 200, 20, pr.VIOLET)
         pr.draw_texture(pheromone_texture, 0, 0, pr.WHITE)
-
-        # Draw GUI.
-
-        # for agent in agents:
-        #     pr.draw_pixel(agent.int_x, agent.int_y, pr.RED)
 
         pr.end_drawing()
 
