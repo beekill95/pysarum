@@ -179,6 +179,18 @@ def diffuse_pheromone(pheromone_trails: np.ndarray):
     return np.real(ifft2(fft2(img) * fft2(kernel)[None, ...]))
 
 
+def create_pheromone_trail_color(
+    width: int, height: int, species_color: tuple[int, int, int]
+) -> np.ndarray:
+    trail = np.zeros((height, width, 4), dtype=np.uint8)
+
+    trail[:, :, 0] = species_color[0]
+    trail[:, :, 1] = species_color[1]
+    trail[:, :, 2] = species_color[2]
+
+    return trail
+
+
 def run(nb_agents: int, seed: int = 0):
     sim_width = 800
     sim_height = 800
@@ -191,6 +203,11 @@ def run(nb_agents: int, seed: int = 0):
     nb_species = len(config.SPECIES)
     pheromone_trails = np.zeros((nb_species, sim_height, sim_width), dtype=np.float32)
     pheromone_textures: list[pr.Texture2D | None] = [None] * nb_species
+
+    species_trail_colors = [
+        create_pheromone_trail_color(sim_width, sim_height, species.color)
+        for species in config.SPECIES
+    ]
 
     while not pr.window_should_close():
         # Reload config.
@@ -206,12 +223,14 @@ def run(nb_agents: int, seed: int = 0):
 
         # Convert the pheromone trail into image.
         for i in range(nb_species):
+            trail_colors = species_trail_colors[i]
+            trail_colors[:, :, 3] = (pheromone_trails[i] * 255).astype(np.uint8)
             pheromone_image = pr.Image(
-                (pheromone_trails[i].flatten() * 255).astype(np.uint8),
+                trail_colors.flatten(),
                 sim_width,
                 sim_height,
                 1,
-                pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
+                pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
             )
             if pheromone_textures[i] is None:
                 pheromone_textures[i] = pr.load_texture_from_image(pheromone_image)
@@ -226,7 +245,7 @@ def run(nb_agents: int, seed: int = 0):
         pr.draw_texture(pheromone_textures[0], 0, 0, pr.WHITE)
 
         # Blend multiple textures into one image.
-        pr.begin_blend_mode(pr.BlendMode.BLEND_ADD_COLORS)
+        pr.begin_blend_mode(pr.BlendMode.BLEND_ADDITIVE)
         for i in range(1, nb_species):
             pr.draw_texture(pheromone_textures[i], 0, 0, pr.WHITE)
         pr.end_blend_mode()
