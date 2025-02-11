@@ -42,7 +42,7 @@ class Agent:
 
         # Move the agent and drop pheromone.
         pheromone_trail = pheromone_trails[self.species_]
-        self._steer_direction(pheromone_trail)
+        self._steer_direction(pheromone_trails)
 
         new_x = self.x + self.velocity_x() * dt
         new_y = self.y + self.velocity_y() * dt
@@ -81,14 +81,14 @@ class Agent:
         self.x = new_x
         self.y = new_y
 
-    def _steer_direction(self, pheromone_trail: np.ndarray):
+    def _steer_direction(self, pheromone_trails: np.ndarray):
         species = self.species
         left_sensor = self._sense(
-            pheromone_trail, self.direction + species.sensor_angle
+            pheromone_trails, self.direction + species.sensor_angle
         )
-        front_sensor = self._sense(pheromone_trail, self.direction)
+        front_sensor = self._sense(pheromone_trails, self.direction)
         right_sensor = self._sense(
-            pheromone_trail, self.direction - species.sensor_angle
+            pheromone_trails, self.direction - species.sensor_angle
         )
 
         if front_sensor < min(left_sensor, right_sensor):
@@ -106,12 +106,12 @@ class Agent:
 
         # Otherwise, keep the current direction.
 
-    def _sense(self, pheromone_trail: np.ndarray, sensor_direction: float):
+    def _sense(self, pheromone_trails: np.ndarray, sensor_direction: float):
         species = self.species
         sensor_pos_x = self.x + math.cos(sensor_direction) * species.sensor_distance
         sensor_pos_y = self.y + math.sin(sensor_direction) * species.sensor_distance
 
-        height, width = pheromone_trail.shape
+        _, height, width = pheromone_trails.shape
 
         xs, ys = (
             sensor_pos_x - species.sensor_size // 2,
@@ -123,16 +123,22 @@ class Agent:
             return -math.inf
 
         # FIXME: this still result into an empty slices.
-        pheromones = (
-            pheromone_trail[
-                max(int(ys), 0) : min(int(ye), height),
-                max(int(xs), 0) : min(int(xe), width),
-            ]
-            .flatten()
-            .tolist()
+        pheromones = pheromone_trails[
+            :,
+            max(int(ys), 0) : min(int(ye), height),
+            max(int(xs), 0) : min(int(xe), width),
+        ]
+        species_pheromones = pheromones[self.species_].flatten().tolist()
+        other_pheromones = (
+            np.delete(pheromones, self.species_, axis=0).flatten().tolist()
         )
 
-        return sum(pheromones) / len(pheromones) if len(pheromones) else -math.inf
+        if len(species_pheromones):
+            species_pheromone = sum(species_pheromones) / len(species_pheromones)
+            other_pheromone = sum(other_pheromones) / len(other_pheromones)
+            return species_pheromone - other_pheromone
+        else:
+            return -math.inf
 
 
 def create_random_agent(world_width: int, world_height: int):

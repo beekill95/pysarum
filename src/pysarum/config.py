@@ -25,6 +25,7 @@ DIFFUSION_KERNEL = np.ones((DIFFUSION_RADIUS, DIFFUSION_RADIUS), dtype=np.float3
 )
 
 # Agents' default characteristics.
+NB_AGENTS = 2000
 AGENT_SPEED = 90.0
 SENSOR_SIZE = 5
 SENSOR_DISTANCE = 9
