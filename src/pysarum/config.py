@@ -14,7 +14,7 @@ class Species(NamedTuple):
     sensor_distance: int
     sensor_angle: float
 
-    color: tuple(int, int, int)
+    color: tuple[int, int, int]
 
 
 # Pheromone characteristics.
@@ -49,5 +49,13 @@ SPECIES = (
         sensor_distance=SENSOR_DISTANCE,
         sensor_angle=SENSOR_ANGLE,
         color=(0, 255, 0),
+    ),
+    Species(
+        speed=AGENT_SPEED,
+        turn_angle=DIRECTION_ANGLE,
+        sensor_size=SENSOR_SIZE,
+        sensor_distance=SENSOR_DISTANCE,
+        sensor_angle=SENSOR_ANGLE,
+        color=(0, 0, 255),
     ),
 )
