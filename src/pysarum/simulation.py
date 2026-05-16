@@ -8,6 +8,9 @@ from dataclasses import dataclass
 import numpy as np
 import pyray as pr
 from numba import njit
+from numpy.fft import fft2
+from numpy.fft import ifft2
+from numpy.fft import ifftshift
 
 from . import config
 
@@ -118,6 +121,10 @@ class Agent:
         )
 
 
+def _steer_direction():
+    pass
+
+
 @njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)")
 def _sense(
     pheromone_trails: np.ndarray,
@@ -174,31 +181,34 @@ def create_random_agent(world_width: int, world_height: int) -> Agent:
     )
 
 
-def evaporate_pheromone(pheromone_trails: np.ndarray, dt: float):
+@njit("f4[:, :, :](f4[:, :, :], f4, f4)")
+def evaporate_pheromone(
+    pheromone_trails: np.ndarray, *, dt: float, evaporation_speed: float
+) -> np.ndarray:
     # Evaporate pheromone trails of different species at a fixed rate.
     # Support both 2d and 3d pheromone trail array.
-    return np.maximum(pheromone_trails - dt * config.EVAPORATION_SPEED, 0.0)
+    return np.maximum(pheromone_trails - dt * evaporation_speed, np.float32(0))
 
 
-def diffuse_pheromone(pheromone_trails: np.ndarray):
+@njit("f4[:, :, :](f4[:, :, :], f4[:, :])")
+def diffuse_pheromone(pheromone_trails: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     # Basically applying convolution 2d on the pheromone trail.
     # Implementation copied from https://stackoverflow.com/a/54977551
     # The pheromone_trails must be of shape <nb_species, height, width>
-    from numpy.fft import fft2, ifft2, ifftshift
 
     assert pheromone_trails.ndim == 3
     img = pheromone_trails
-    kernel = config.DIFFUSION_KERNEL
 
     sz = (
         img.shape[-1] - kernel.shape[0],
         img.shape[-2] - kernel.shape[1],
     )  # total amount of padding
-    kernel = np.pad(
-        kernel,
-        (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
-        "constant",
-    )
+    # TODO: numba doesn't support np.pad
+    # kernel = np.pad(
+    #     kernel,
+    #     (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
+    #     "constant",
+    # )
     kernel = ifftshift(kernel)
 
     return np.real(ifft2(fft2(img) * fft2(kernel)[None, ...]))
@@ -243,8 +253,12 @@ def run(nb_agents: int, seed: int = 0):
         for agent in agents:
             agent.move(dt, pheromone_trails, sim_width, sim_height)
 
-        pheromone_trails = evaporate_pheromone(pheromone_trails, dt)
-        pheromone_trails = diffuse_pheromone(pheromone_trails)
+        pheromone_trails = evaporate_pheromone(
+            pheromone_trails, dt=dt, evaporation_speed=config.EVAPORATION_SPEED
+        )
+        pheromone_trails = diffuse_pheromone(
+            pheromone_trails, kernel=config.DIFFUSION_KERNEL
+        )
 
         # Convert the pheromone trail into image.
         for i in range(nb_species):
