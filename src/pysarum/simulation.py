@@ -191,27 +191,15 @@ def evaporate_pheromone(
 
 
 @njit("f4[:, :, :](f4[:, :, :], f4[:, :])")
-def diffuse_pheromone(pheromone_trails: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+def diffuse_pheromone(
+    pheromone_trails: np.ndarray, padded_kernel: np.ndarray
+) -> np.ndarray:
     # Basically applying convolution 2d on the pheromone trail.
     # Implementation copied from https://stackoverflow.com/a/54977551
     # The pheromone_trails must be of shape <nb_species, height, width>
-
     assert pheromone_trails.ndim == 3
-    img = pheromone_trails
-
-    sz = (
-        img.shape[-1] - kernel.shape[0],
-        img.shape[-2] - kernel.shape[1],
-    )  # total amount of padding
-    # TODO: numba doesn't support np.pad
-    # kernel = np.pad(
-    #     kernel,
-    #     (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
-    #     "constant",
-    # )
-    kernel = ifftshift(kernel)
-
-    return np.real(ifft2(fft2(img) * fft2(kernel)[None, ...]))
+    kernel = ifftshift(padded_kernel)
+    return np.real(ifft2(fft2(pheromone_trails) * fft2(kernel)[None, ...]))
 
 
 def create_pheromone_trail_color(
@@ -244,6 +232,18 @@ def run(nb_agents: int, seed: int = 0):
         for species in config.SPECIES
     ]
 
+    # Pad the diffusion kernel to match the pheromone_trails shape.
+    diffusion_kernel = config.DIFFUSION_KERNEL
+    sz = (
+        pheromone_trails.shape[-1] - diffusion_kernel.shape[0],
+        pheromone_trails.shape[-2] - diffusion_kernel.shape[1],
+    )  # total amount of padding
+    diffusion_kernel = np.pad(
+        diffusion_kernel,
+        (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
+        "constant",
+    )
+
     while not pr.window_should_close():
         # Reload config.
         importlib.reload(config)
@@ -256,9 +256,7 @@ def run(nb_agents: int, seed: int = 0):
         pheromone_trails = evaporate_pheromone(
             pheromone_trails, dt=dt, evaporation_speed=config.EVAPORATION_SPEED
         )
-        pheromone_trails = diffuse_pheromone(
-            pheromone_trails, kernel=config.DIFFUSION_KERNEL
-        )
+        pheromone_trails = diffuse_pheromone(pheromone_trails, diffusion_kernel)
 
         # Convert the pheromone trail into image.
         for i in range(nb_species):
