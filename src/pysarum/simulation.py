@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pyray as pr
+from numba import njit
 
 from . import config
 
@@ -27,7 +28,7 @@ class Agent:
         return int(self.y)
 
     @property
-    def species(self):
+    def species(self) -> config.Species:
         return config.SPECIES[self.species_]
 
     def velocity_x(self):
@@ -107,41 +108,59 @@ class Agent:
         # Otherwise, keep the current direction.
 
     def _sense(self, pheromone_trails: np.ndarray, sensor_direction: float):
-        species = self.species
-        sensor_pos_x = self.x + math.cos(sensor_direction) * species.sensor_distance
-        sensor_pos_y = self.y + math.sin(sensor_direction) * species.sensor_distance
-
-        _, height, width = pheromone_trails.shape
-
-        xs, ys = (
-            sensor_pos_x - species.sensor_size // 2,
-            sensor_pos_y - species.sensor_size // 2,
-        )
-        xe, ye = xs + species.sensor_size, ys + species.sensor_size
-
-        if (xe <= 0) or (ye <= 0) or (xs >= width) or (ys >= height):
-            return -math.inf
-
-        # FIXME: this still result into an empty slices.
-        pheromones = pheromone_trails[
-            :,
-            max(int(ys), 0) : min(int(ye), height),
-            max(int(xs), 0) : min(int(xe), width),
-        ]
-        species_pheromones = pheromones[self.species_].flatten().tolist()
-        other_pheromones = (
-            np.delete(pheromones, self.species_, axis=0).flatten().tolist()
+        return _sense(
+            pheromone_trails,
+            species_idx=self.species_,
+            agent_location=(self.x, self.y),
+            sensor_direction=sensor_direction,
+            sensor_size=self.species.sensor_size,
+            sensor_distance=self.species.sensor_distance,
         )
 
-        if len(species_pheromones):
-            species_pheromone = sum(species_pheromones) / len(species_pheromones)
-            other_pheromone = sum(other_pheromones) / len(other_pheromones)
-            return species_pheromone - other_pheromone
-        else:
-            return -math.inf
+
+@njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)")
+def _sense(
+    pheromone_trails: np.ndarray,
+    *,
+    species_idx: int,
+    agent_location: tuple[float, float],
+    sensor_direction: float,
+    sensor_size: int,
+    sensor_distance: int,
+) -> float:
+    x, y = agent_location
+    sensor_pos_x = x + math.cos(sensor_direction) * sensor_distance
+    sensor_pos_y = y + math.sin(sensor_direction) * sensor_distance
+
+    _, height, width = pheromone_trails.shape
+
+    xs, ys = (
+        sensor_pos_x - sensor_size // 2,
+        sensor_pos_y - sensor_size // 2,
+    )
+    xe, ye = xs + sensor_size, ys + sensor_size
+
+    if (xe <= 0) or (ye <= 0) or (xs >= width) or (ys >= height):
+        return -math.inf
+
+    pheromones = pheromone_trails[
+        :,
+        max(int(ys), 0) : min(int(ye), height),
+        max(int(xs), 0) : min(int(xe), width),
+    ]
+    species_pheromones = pheromones[species_idx, :, :]
+
+    if species_pheromones.size:
+        species_pheromone = species_pheromones.sum()
+        all_pheromone = pheromones.sum()
+        return (species_pheromone / species_pheromones.size) - (
+            all_pheromone - species_pheromone
+        ) / (pheromones.size - species_pheromones.size)
+    else:
+        return -math.inf
 
 
-def create_random_agent(world_width: int, world_height: int):
+def create_random_agent(world_width: int, world_height: int) -> Agent:
     angle = random.random() * 2 * math.pi
     species = random.randint(1, len(config.SPECIES)) - 1
 
@@ -208,7 +227,7 @@ def run(nb_agents: int, seed: int = 0):
     agents = [create_random_agent(sim_width, sim_height) for _ in range(nb_agents)]
     nb_species = len(config.SPECIES)
     pheromone_trails = np.zeros((nb_species, sim_height, sim_width), dtype=np.float32)
-    pheromone_textures: list[pr.Texture2D | None] = [None] * nb_species
+    pheromone_textures: list[pr.Texture | None] = [None] * nb_species
 
     species_trail_colors = [
         create_pheromone_trail_color(sim_width, sim_height, species.color)
