@@ -87,48 +87,22 @@ class Agent:
 
     def _steer_direction(self, pheromone_trails: np.ndarray):
         species = self.species
-        left_sensor = self._sense(
-            pheromone_trails, self.direction + species.sensor_angle
-        )
-        front_sensor = self._sense(pheromone_trails, self.direction)
-        right_sensor = self._sense(
-            pheromone_trails, self.direction - species.sensor_angle
-        )
-
-        if front_sensor < min(left_sensor, right_sensor):
-            # Rotate randomly.
-            self.direction = random.choice(
-                [
-                    self.direction + species.turn_angle,
-                    self.direction - species.turn_angle,
-                ]
-            )
-        elif front_sensor < left_sensor:
-            self.direction += species.turn_angle
-        elif front_sensor < right_sensor:
-            self.direction -= species.turn_angle
-
-        # Otherwise, keep the current direction.
-
-    def _sense(self, pheromone_trails: np.ndarray, sensor_direction: float):
-        return _sense(
+        direction = _steer_direction(
             pheromone_trails,
-            species_idx=self.species_,
-            agent_location=(self.x, self.y),
-            sensor_direction=sensor_direction,
-            sensor_size=self.species.sensor_size,
-            sensor_distance=self.species.sensor_distance,
+            self.species_,
+            (self.x, self.y),
+            self.direction,
+            sensor_angle=species.sensor_angle,
+            sensor_size=species.sensor_size,
+            sensor_distance=species.sensor_distance,
         )
 
-
-def _steer_direction():
-    pass
+        self.direction += direction * species.turn_angle
 
 
 @njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)", cache=True)
 def _sense(
     pheromone_trails: np.ndarray,
-    *,
     species_idx: int,
     agent_location: tuple[float, float],
     sensor_direction: float,
@@ -165,6 +139,62 @@ def _sense(
         ) / (pheromones.size - species_pheromones.size)
     else:
         return -math.inf
+
+
+@njit("i4(f4[:, :, :], u4, UniTuple(f8, 2), f8, f8, u4, u4)", cache=True)
+def _steer_direction(
+    pheromone_trails: np.ndarray,
+    *,
+    species_idx: int,
+    agent_location: tuple[float, float],
+    agent_direction: float,
+    sensor_angle: float,
+    sensor_size: int,
+    sensor_distance: int,
+) -> int:
+    """
+    Sense three different directions: front, left and right,
+    based on the amount of pheromone level of these sensors,
+    turning to the direction with higher level of pheromone,
+    or choosing randomly of the levels are equal.
+
+    Returns: 0 to stay on the current direction, -1 to turn to the left,
+        +1 to turn to the right.
+    """
+    left_sensor = _sense(
+        pheromone_trails,
+        species_idx,
+        agent_location,
+        agent_direction + sensor_angle,
+        sensor_size,
+        sensor_distance,
+    )
+    front_sensor = _sense(
+        pheromone_trails,
+        species_idx,
+        agent_location,
+        agent_direction,
+        sensor_size,
+        sensor_distance,
+    )
+    right_sensor = _sense(
+        pheromone_trails,
+        species_idx,
+        agent_location,
+        agent_direction - sensor_angle,
+        sensor_size,
+        sensor_distance,
+    )
+
+    if front_sensor < min(left_sensor, right_sensor):
+        # Rotate randomly.
+        return np.random.choice(np.array([-1, 1]))
+    elif front_sensor < left_sensor:
+        return 1
+    elif front_sensor < right_sensor:
+        return -1
+
+    return 0
 
 
 def create_random_agent(world_width: int, world_height: int) -> Agent:
