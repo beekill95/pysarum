@@ -125,7 +125,7 @@ def _steer_direction():
     pass
 
 
-@njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)")
+@njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)", cache=True)
 def _sense(
     pheromone_trails: np.ndarray,
     *,
@@ -181,7 +181,7 @@ def create_random_agent(world_width: int, world_height: int) -> Agent:
     )
 
 
-@njit("f4[:, :, :](f4[:, :, :], f4, f4)")
+@njit("f4[:, :, :](f4[:, :, :], f4, f4)", cache=True)
 def evaporate_pheromone(
     pheromone_trails: np.ndarray, *, dt: float, evaporation_speed: float
 ) -> np.ndarray:
@@ -190,7 +190,7 @@ def evaporate_pheromone(
     return np.maximum(pheromone_trails - dt * evaporation_speed, np.float32(0))
 
 
-@njit("f4[:, :, :](f4[:, :, :], f4[:, :])")
+@njit("f4[:, :, :](f4[:, :, :], f4[:, :])", cache=True)
 def diffuse_pheromone(
     pheromone_trails: np.ndarray, padded_kernel: np.ndarray
 ) -> np.ndarray:
