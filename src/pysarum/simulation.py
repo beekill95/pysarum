@@ -3,9 +3,10 @@ from __future__ import annotations
 import importlib
 import math
 import random
-from dataclasses import dataclass
 
+import numba as nb
 import numpy as np
+import numpy.typing as npt
 import pyray as pr
 from numba import njit
 from numpy.fft import fft2
@@ -14,90 +15,16 @@ from numpy.fft import ifftshift
 
 from . import config
 
-
-@dataclass(slots=True)
-class Agent:
-    x: float
-    y: float
-    direction: float
-    species_: int
-
-    @property
-    def int_x(self):
-        return int(self.x)
-
-    @property
-    def int_y(self):
-        return int(self.y)
-
-    @property
-    def species(self) -> config.Species:
-        return config.SPECIES[self.species_]
-
-    def velocity_x(self):
-        return math.cos(self.direction) * self.species.speed
-
-    def velocity_y(self):
-        return math.sin(self.direction) * self.species.speed
-
-    def move(self, dt: float, pheromone_trails: np.ndarray, width: int, height: int):
-        # pheromone_trails must be of size <nb_species, height, width>
-        assert pheromone_trails.ndim == 3
-
-        # Move the agent and drop pheromone.
-        pheromone_trail = pheromone_trails[self.species_]
-        self._steer_direction(pheromone_trails)
-
-        new_x = self.x + self.velocity_x() * dt
-        new_y = self.y + self.velocity_y() * dt
-
-        if new_x >= width or new_x <= 0:
-            new_x = 0 if new_x < 0 else width
-
-            # Choose random angle instead of just moving in the opposite direction.
-            angle = random.random() * math.pi
-            self.direction = (
-                (angle - math.pi / 2) if new_x <= 0 else (angle + math.pi / 2)
-            )
-
-        if new_y >= height or new_y <= 0:
-            new_y = 0 if new_y < 0 else height
-
-            # Choose random angle instead of just moving in the opposite direction.
-            angle = random.random() * math.pi
-            self.direction = angle if new_y <= 0 else (angle + math.pi)
-
-        # Mark the trail with pheromone.
-        # TODO: is there a way to do this efficiently?
-        nb_steps = int(math.ceil(max(abs(new_x - self.x), abs(new_y - self.y))))
-        if nb_steps:
-            delta_x = (new_x - self.x) / nb_steps
-            delta_y = (new_y - self.y) / nb_steps
-            for i in range(nb_steps):
-                x = int(self.x + i * delta_x)
-                y = int(self.y + i * delta_y)
-
-                # TODO: how to remove this check?
-                if (0 <= x < width) and (0 <= y < height):
-                    pheromone_trail[y, x] = 1.0
-
-        # Update the self's position.
-        self.x = new_x
-        self.y = new_y
-
-    def _steer_direction(self, pheromone_trails: np.ndarray):
-        species = self.species
-        direction = _steer_direction(
-            pheromone_trails,
-            self.species_,
-            (self.x, self.y),
-            self.direction,
-            sensor_angle=species.sensor_angle,
-            sensor_size=species.sensor_size,
-            sensor_distance=species.sensor_distance,
-        )
-
-        self.direction += direction * species.turn_angle
+AgentDtype = np.dtype(
+    [
+        ("x", np.float32),
+        ("y", np.float32),
+        ("direction", np.float32),
+        ("species", np.uint8),
+    ]
+)
+AgentNbDtype = nb.from_dtype(AgentDtype)
+AgentsNbDtpe = nb.types.Array(AgentNbDtype, 1, "C")
 
 
 @njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)", cache=True)
@@ -144,7 +71,6 @@ def _sense(
 @njit("i4(f4[:, :, :], u4, UniTuple(f8, 2), f8, f8, u4, u4)", cache=True)
 def _steer_direction(
     pheromone_trails: np.ndarray,
-    *,
     species_idx: int,
     agent_location: tuple[float, float],
     agent_direction: float,
@@ -197,24 +123,25 @@ def _steer_direction(
     return 0
 
 
-def create_random_agent(world_width: int, world_height: int) -> Agent:
-    angle = random.random() * 2 * math.pi
-    species = random.randint(1, len(config.SPECIES)) - 1
+@njit(AgentsNbDtpe(nb.u4, nb.u4, nb.u4, nb.u4), cache=True)
+def generate_random_agents(
+    *, nb_agents: int, world_width: int, world_height: int, nb_species: int
+) -> npt.NDArray[AgentDtype]:
+    agents = np.zeros(nb_agents, dtype=AgentDtype)
 
-    return Agent(
-        # random.randint(0, world_width),
-        # random.randint(0, world_height),
-        world_width / 2,
-        world_height / 2,
-        angle,
-        species,
-    )
+    for i in range(nb_agents):
+        agents[i].x = world_width / 2.0
+        agents[i].y = world_height / 2.0
+        agents[i].direction = random.random() * 2 * math.pi
+        agents[i].species = random.randint(0, nb_species - 1)
+
+    return agents
 
 
 @njit("f4[:, :, :](f4[:, :, :], f4, f4)", cache=True)
 def evaporate_pheromone(
-    pheromone_trails: np.ndarray, *, dt: float, evaporation_speed: float
-) -> np.ndarray:
+    pheromone_trails: np.NDArray[np.float32], dt: float, evaporation_speed: float
+) -> np.NDArray[np.float32]:
     # Evaporate pheromone trails of different species at a fixed rate.
     # Support both 2d and 3d pheromone trail array.
     return np.maximum(pheromone_trails - dt * evaporation_speed, np.float32(0))
@@ -222,14 +149,87 @@ def evaporate_pheromone(
 
 @njit("f4[:, :, :](f4[:, :, :], f4[:, :])", cache=True)
 def diffuse_pheromone(
-    pheromone_trails: np.ndarray, padded_kernel: np.ndarray
-) -> np.ndarray:
+    pheromone_trails: np.NDArray[np.float32], padded_kernel: np.NDArray[np.float32]
+) -> np.NDArray[np.float32]:
     # Basically applying convolution 2d on the pheromone trail.
     # Implementation copied from https://stackoverflow.com/a/54977551
     # The pheromone_trails must be of shape <nb_species, height, width>
     assert pheromone_trails.ndim == 3
     kernel = ifftshift(padded_kernel)
     return np.real(ifft2(fft2(pheromone_trails) * fft2(kernel)[None, ...]))
+
+
+@njit(cache=True)
+def _simulate(
+    agents: npt.NDArray[AgentDtype],
+    pheromone_trails: npt.NDArray[np.float32],
+    dt: float,
+    *,
+    padded_diffusion_kernel: npt.NDArray[np.float32],
+    species_list: tuple[config.Species, ...],
+    evaporation_speed: float,
+) -> npt.NDArray[np.float32]:
+    "Perform simulation step forward dt."
+    _, width, height = pheromone_trails.shape
+
+    # Move all the agents at once.
+    for agent in agents:
+        # Steer the agent.
+        species = species_list[agent.species]
+        direction = _steer_direction(
+            pheromone_trails,
+            agent.species,
+            (agent.x, agent.y),
+            agent.direction,
+            species.sensor_angle,
+            species.sensor_size,
+            species.sensor_distance,
+        )
+        new_direction = agent.direction + direction * species.turn_angle
+
+        # Calculate the agent new position.
+        new_x = agent.x + math.cos(new_direction) * species.speed * dt
+        new_y = agent.y + math.sin(new_direction) * species.speed * dt
+
+        if new_x >= width or new_x <= 0:
+            new_x = 0 if new_x < 0 else width
+
+            # Choose random angle instead of just moving in the opposite direction.
+            angle = random.random() * math.pi
+            new_direction = (
+                (angle - math.pi / 2) if new_x <= 0 else (angle + math.pi / 2)
+            )
+
+        if new_y >= height or new_y <= 0:
+            new_y = 0 if new_y < 0 else height
+
+            # Choose random angle instead of just moving in the opposite direction.
+            angle = random.random() * math.pi
+            new_direction = angle if new_y <= 0 else (angle + math.pi)
+
+        # Mark the trail with pheromone.
+        # TODO: is there a way to do this efficiently?
+        nb_steps = int(math.ceil(max(abs(new_x - agent.x), abs(new_y - agent.y))))
+        if nb_steps:
+            delta_x = (new_x - agent.x) / nb_steps
+            delta_y = (new_y - agent.y) / nb_steps
+            for i in range(nb_steps):
+                x = int(agent.x + i * delta_x)
+                y = int(agent.y + i * delta_y)
+
+                # TODO: how to remove this check?
+                if (0 <= x < width) and (0 <= y < height):
+                    pheromone_trails[agent.species, y, x] = 1.0
+
+        # Update the agent's location and direction.
+        agent.x = new_x
+        agent.y = new_y
+        agent.direction = new_direction
+
+    # Diffuse and evaporate the pheromones.
+    pheromone_trails = evaporate_pheromone(pheromone_trails, dt, evaporation_speed)
+    pheromone_trails = diffuse_pheromone(pheromone_trails, padded_diffusion_kernel)
+    return pheromone_trails
 
 
 def create_pheromone_trail_color(
@@ -252,7 +252,12 @@ def run(nb_agents: int, seed: int = 0):
 
     pr.init_window(sim_width, sim_height, "Pysarum")
 
-    agents = [create_random_agent(sim_width, sim_height) for _ in range(nb_agents)]
+    agents = generate_random_agents(
+        nb_agents=nb_agents,
+        world_width=sim_width,
+        world_height=sim_height,
+        nb_species=len(config.SPECIES),
+    )
     nb_species = len(config.SPECIES)
     pheromone_trails = np.zeros((nb_species, sim_height, sim_width), dtype=np.float32)
     pheromone_textures: list[pr.Texture | None] = [None] * nb_species
@@ -280,13 +285,14 @@ def run(nb_agents: int, seed: int = 0):
 
         # Update agents position, and also mark the pheromone.
         dt = pr.get_frame_time()
-        for agent in agents:
-            agent.move(dt, pheromone_trails, sim_width, sim_height)
-
-        pheromone_trails = evaporate_pheromone(
-            pheromone_trails, dt=dt, evaporation_speed=config.EVAPORATION_SPEED
+        pheromone_trails = _simulate(
+            agents,
+            pheromone_trails,
+            np.float32(dt),
+            padded_diffusion_kernel=diffusion_kernel,
+            species_list=config.SPECIES,
+            evaporation_speed=np.float32(config.EVAPORATION_SPEED),
         )
-        pheromone_trails = diffuse_pheromone(pheromone_trails, diffusion_kernel)
 
         # Convert the pheromone trail into image.
         for i in range(nb_species):
