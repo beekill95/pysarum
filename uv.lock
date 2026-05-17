@@ -259,6 +259,7 @@ dependencies = [
     { name = "numba" },
     { name = "numpy" },
     { name = "raylib" },
+    { name = "rocket-fft" },
 ]
 
 [package.dev-dependencies]
@@ -271,6 +272,7 @@ requires-dist = [
     { name = "numba", specifier = ">=0.65.1" },
     { name = "numpy", specifier = ">=2.2.2" },
     { name = "raylib", specifier = ">=5.5.0.2" },
+    { name = "rocket-fft", specifier = ">=0.3.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -365,6 +367,32 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/b4/817944e9cbf8a3f6a8a0d1914fa68a28effb3b455dd57a244684b79bfac7/raylib-5.5.0.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9784976d71ef1e95ed4e652c410052c22dcc3f59fee752784fdb6e1d702b2e97", size = 2201283, upload-time = "2025-12-11T15:28:11.357Z" },
     { url = "https://files.pythonhosted.org/packages/95/ea/02914524f5a4f774f9965e9865283260b7c0a733da7a6e6c3627287f4ffa/raylib-5.5.0.4-cp314-cp314-win32.whl", hash = "sha256:ca0a19c251cc1f3574e1f9fe33a4b0a6a661479b3d5d593487072485e8b14eee", size = 1495571, upload-time = "2025-12-11T15:28:16.015Z" },
     { url = "https://files.pythonhosted.org/packages/38/7f/542019daf0e13e2f5c178f7f37a76e8493d6a0952332ffd1a55f34738ff1/raylib-5.5.0.4-cp314-cp314-win_amd64.whl", hash = "sha256:cb1453fc68ee2ad5848ee41123ec1aab97d5a553e55aeb1071a332e1c8626a48", size = 1763211, upload-time = "2025-12-11T15:28:18.261Z" },
+]
+
+[[package]]
+name = "rocket-fft"
+version = "0.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numba" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/b0/09cbec3177ecf56e5ceb789a69fbcdcbabe758cbb682e5d36b14aa8c05fb/rocket_fft-0.3.1.tar.gz", hash = "sha256:ddc902a361099aff9fc02fe9ea3b0d036c2f67f93df356c2b754f7627d7fa4f4", size = 74276, upload-time = "2025-12-26T00:30:54.083Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/78/8edd1349af038a8ab0fa3aee97ff2b91b4227e2561f0f721e78f3cd24635/rocket_fft-0.3.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:89be2e23812678ef7afdc793682e9aef4afbd7a0a30041cb292f02c73d62a0a9", size = 359246, upload-time = "2025-12-26T00:30:27.668Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/3a/41b7a3355e6d44139f2a891d4763ff0a1eeb634fc0faa43cefdb1cdda702/rocket_fft-0.3.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0de1a8841638e3091ef774d9304a6427801fd06dd29e6d2baacd17bac65eb9f3", size = 322703, upload-time = "2025-12-26T00:30:29.169Z" },
+    { url = "https://files.pythonhosted.org/packages/08/18/12d001c33cd7c4e012da59d25086879aec303e0e157d9ec737ecab8e8f58/rocket_fft-0.3.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:46970c0dcc70bd9c365d6a9f4a235edec2e8eaad628097c0e21d920669e25abe", size = 2151682, upload-time = "2025-12-26T00:30:30.315Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/92/98bd01cad9e5ceeb383722d744597d066e37cdd0e54742906341aa369c28/rocket_fft-0.3.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7d64c9fc81206f2c77f74f68761f54ac6f1ebe4c8840f0ef9795c28ab229463f", size = 2160197, upload-time = "2025-12-26T00:30:31.945Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/c7/d273a880278c1a0946e4bec5ca54e79595b50003b5eb4400c1d60e5e41e0/rocket_fft-0.3.1-cp312-cp312-win_amd64.whl", hash = "sha256:05afc9805cfb97b330417b4bfcd435aace98dff2fc479bfbcb4ac4568f56ec51", size = 215185, upload-time = "2025-12-26T00:30:33.412Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/33/1b1025d47226031616bf1ac02e63f240d02b89fe2b8462b35d1766519968/rocket_fft-0.3.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:3fa706995cebcc7bff41894e23323d2a221906454d21cb12fed97833b0f7433e", size = 359250, upload-time = "2025-12-26T00:30:34.456Z" },
+    { url = "https://files.pythonhosted.org/packages/af/3c/371012b4ffa4697574ecfa148e8068a74e6ad57a182ec78f9b221bd4270c/rocket_fft-0.3.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:4a50609003f944aea1b8000a19f9b9cf9cbaaa5e4726e5aefaccccd1cfd81a99", size = 322700, upload-time = "2025-12-26T00:30:35.982Z" },
+    { url = "https://files.pythonhosted.org/packages/48/2c/5bbe8d6b0c4e009f7bc6f9f4eee802a9b556ec2c3b02b9d5e5ccfa8edff1/rocket_fft-0.3.1-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5906c6517fc87295a1d142c7e6ebd1c55e057f6ee4c605549bbcecacab83774f", size = 2151627, upload-time = "2025-12-26T00:30:37.177Z" },
+    { url = "https://files.pythonhosted.org/packages/55/0d/ac67fb0b2fac382ab5585719bbd1f4927c19ba0ee3bbc28dc8a1ef83e81d/rocket_fft-0.3.1-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9d830aacc34d65b28daab715aa4a90d98489e89a48c2836039982f18ba1e2db3", size = 2160355, upload-time = "2025-12-26T00:30:38.81Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/af/0ab2b29548925c6f84607010d3bf5a928331232d1ef54f273ab9989c64c0/rocket_fft-0.3.1-cp313-cp313-win_amd64.whl", hash = "sha256:97452673ea99b907c75c99c4046d5297ea01778a6e74cb51ba515c01e3e5e5d7", size = 215172, upload-time = "2025-12-26T00:30:39.885Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/57/ca01ecc182f469425ddcd7b1a773a23c1b747465069ee5168d0c8cec2f4f/rocket_fft-0.3.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:284db6f40d33c3d4c7a4fef1682938b7a432ca921273d7d19e868118538d8ac4", size = 359426, upload-time = "2025-12-26T00:30:40.932Z" },
+    { url = "https://files.pythonhosted.org/packages/78/5f/acc52602538623f8eafe11695fc1b79dc9f09611a51d159d52ba0e3ade7f/rocket_fft-0.3.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:d332e4ce3e4b3fcddb2a0ef0aa8337b8ab9d847d119aac470d03c7f28cbeb762", size = 322701, upload-time = "2025-12-26T00:30:42.015Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/c6/3ff33ec86e61867c0e36436eb2c9ba258eceba94419594d73ff473460e27/rocket_fft-0.3.1-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:65a7577d7f3b4e3672de179f91fee8339211b3f5ae13eef1b30cb6a318f0308c", size = 2151746, upload-time = "2025-12-26T00:30:43.66Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/d9/def65716cd225954d0cd5f1f6326c72c20601db5dc65557ef4b66157ccea/rocket_fft-0.3.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:97614dbebb2686a644bbf6c6f8a6198f063052f4c88901d0ca2808536c2e83cc", size = 2160407, upload-time = "2025-12-26T00:30:44.959Z" },
+    { url = "https://files.pythonhosted.org/packages/12/90/72606ca091da7c40f72c9423bf5d27b50f7561619780586893fc43cb562f/rocket_fft-0.3.1-cp314-cp314-win_amd64.whl", hash = "sha256:3ce880c2317790410d4593d46b3a947a371abd98fc14a8ac6431694b68dfaacc", size = 218874, upload-time = "2025-12-26T00:30:46.2Z" },
 ]
 
 [[package]]
