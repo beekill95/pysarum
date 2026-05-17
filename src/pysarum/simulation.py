@@ -244,10 +244,7 @@ def create_pheromone_trail_color(
     return trail
 
 
-def run(nb_agents: int, seed: int = 0):
-    sim_width = 800
-    sim_height = 800
-
+def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: int = 0):
     random.seed(seed)
 
     pr.init_window(sim_width, sim_height, "Pysarum")
@@ -324,6 +321,9 @@ def run(nb_agents: int, seed: int = 0):
         pr.end_blend_mode()
 
         pr.end_drawing()
+
+        # Show fps.
+        print(f"\rCurrent FPS: {pr.get_fps()}".ljust(25), end="", flush=True)
 
     # Unload all textures.
     for i in range(nb_species):
