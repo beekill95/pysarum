@@ -140,7 +140,7 @@ def generate_random_agents(
 
 @njit("f4[:, :, :](f4[:, :, :], f4, f4)", cache=True)
 def evaporate_pheromone(
-    pheromone_trails: np.NDArray[np.float32], dt: float, evaporation_speed: float
+    pheromone_trails: np.NDArray[np.float32], dt: np.float32, evaporation_speed: float
 ) -> np.NDArray[np.float32]:
     # Evaporate pheromone trails of different species at a fixed rate.
     # Support both 2d and 3d pheromone trail array.
@@ -159,11 +159,11 @@ def diffuse_pheromone(
     return np.real(ifft2(fft2(pheromone_trails) * fft2(kernel)[None, ...]))
 
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _simulate(
     agents: npt.NDArray[AgentDtype],
     pheromone_trails: npt.NDArray[np.float32],
-    dt: float,
+    dt: np.float32,
     *,
     padded_diffusion_kernel: npt.NDArray[np.float32],
     species_list: tuple[config.Species, ...],
@@ -172,12 +172,21 @@ def _simulate(
     "Perform simulation step forward dt."
     _, width, height = pheromone_trails.shape
 
+    # Get number of threads numba spawns and repeat the pheromone_trails across those threads.
+    pheromone_trails_copies = [
+        pheromone_trails.copy() for _ in range(nb.config.NUMBA_NUM_THREADS)
+    ]
+
     # Move all the agents at once.
-    for agent in agents:
+    for ai in nb.prange(len(agents)):
+        thread_pheromone_trails = pheromone_trails_copies[nb.get_thread_id()]
+
+        agent = agents[ai]
+
         # Steer the agent.
         species = species_list[agent.species]
         direction = _steer_direction(
-            pheromone_trails,
+            thread_pheromone_trails,
             agent.species,
             (agent.x, agent.y),
             agent.direction,
@@ -219,12 +228,16 @@ def _simulate(
 
                 # TODO: how to remove this check?
                 if (0 <= x < width) and (0 <= y < height):
-                    pheromone_trails[agent.species, y, x] = 1.0
+                    thread_pheromone_trails[agent.species, y, x] = 1.0
 
         # Update the agent's location and direction.
         agent.x = new_x
         agent.y = new_y
         agent.direction = new_direction
+
+    # Combine the trails.
+    for i in range(len(pheromone_trails_copies)):
+        pheromone_trails = np.maximum(pheromone_trails, pheromone_trails_copies[i])
 
     # Diffuse and evaporate the pheromones.
     pheromone_trails = evaporate_pheromone(pheromone_trails, dt, evaporation_speed)
