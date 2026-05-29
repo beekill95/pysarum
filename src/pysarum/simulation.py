@@ -23,6 +23,16 @@ AgentDtype = np.dtype(
         ("species", np.uint8),
     ]
 )
+SpeciesDtype = np.dtype(
+    [
+        ("speed", np.float64),
+        ("turn_angle", np.float64),
+        ("sensor_size", np.int64),
+        ("sensor_distance", np.int64),
+        ("sensor_angle", np.float64),
+    ]
+)
+
 AgentNbDtype = nb.from_dtype(AgentDtype)
 AgentsNbDtpe = nb.types.Array(AgentNbDtype, 1, "C")
 
@@ -166,7 +176,8 @@ def _simulate(
     dt: np.float32,
     *,
     padded_diffusion_kernel: npt.NDArray[np.float32],
-    species_list: tuple[config.Species, ...],
+    # species_list: tuple[config.Species, ...],
+    species_arr: npt.NDArray[SpeciesDtype],
     evaporation_speed: float,
 ) -> npt.NDArray[np.float32]:
     "Perform simulation step forward dt."
@@ -184,7 +195,7 @@ def _simulate(
         agent = agents[ai]
 
         # Steer the agent.
-        species = species_list[agent.species]
+        species = species_arr[agent.species]
         direction = _steer_direction(
             thread_pheromone_trails,
             agent.species,
@@ -288,6 +299,13 @@ def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: in
         (((sz[0] + 1) // 2, sz[0] // 2), ((sz[1] + 1) // 2, sz[1] // 2)),
         "constant",
     )
+    species_arr = np.array(
+        [
+            tuple(v for k, v in species._asdict().items() if k != "color")
+            for species in config.SPECIES
+        ],
+        dtype=SpeciesDtype,
+    )
 
     while not pr.window_should_close():
         # Reload config.
@@ -300,7 +318,8 @@ def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: in
             pheromone_trails,
             np.float32(dt),
             padded_diffusion_kernel=diffusion_kernel,
-            species_list=config.SPECIES,
+            # species_list=config.SPECIES,
+            species_arr=species_arr,
             evaporation_speed=np.float32(config.EVAPORATION_SPEED),
         )
 

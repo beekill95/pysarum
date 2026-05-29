@@ -5,7 +5,7 @@ from .simulation import run
 
 
 def main() -> int:
-    run(NB_AGENTS, seed=5, sim_width=800, sim_height=800)
+    run(NB_AGENTS, seed=5, sim_width=1000, sim_height=1000)
     return 0
 
 
