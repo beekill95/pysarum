@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import math
 import random
+from typing import Callable
 
 import numba as nb
 import numpy as np
@@ -25,6 +26,8 @@ AgentDtype = np.dtype(
 )
 AgentNbDtype = nb.from_dtype(AgentDtype)
 AgentsNbDtpe = nb.types.Array(AgentNbDtype, 1, "C")
+Float32Array = npt.NDArray[np.float32]
+DiffusionStencil = Callable[[Float32Array], Float32Array]
 
 
 @njit("f8(f4[:, :, :], u4, UniTuple(f8, 2), f8, u4, u4)", cache=True)
@@ -138,7 +141,7 @@ def generate_random_agents(
     return agents
 
 
-@njit("f4[:, :, :](f4[:, :, :], f4, f4)", cache=True)
+@njit("f4[:, :, :](f4[:, :, :], f4, f4)", parallel=True, cache=True)
 def evaporate_pheromone(
     pheromone_trails: np.NDArray[np.float32], dt: float, evaporation_speed: float
 ) -> np.NDArray[np.float32]:
@@ -165,7 +168,7 @@ def _simulate(
     pheromone_trails: npt.NDArray[np.float32],
     dt: float,
     *,
-    padded_diffusion_kernel: npt.NDArray[np.float32],
+    # diffusion_stencil: DiffusionStencil,
     species_list: tuple[config.Species, ...],
     evaporation_speed: float,
 ) -> npt.NDArray[np.float32]:
@@ -228,7 +231,7 @@ def _simulate(
 
     # Diffuse and evaporate the pheromones.
     pheromone_trails = evaporate_pheromone(pheromone_trails, dt, evaporation_speed)
-    pheromone_trails = diffuse_pheromone(pheromone_trails, padded_diffusion_kernel)
+    pheromone_trails = apply_diffusion(pheromone_trails)
     return pheromone_trails
 
 
@@ -242,6 +245,56 @@ def create_pheromone_trail_color(
     trail[:, :, 2] = species_color[2]
 
     return trail
+
+
+def create_diffusion_stencil(
+    diffusion_kernel: Float32Array,
+) -> Callable[[Float32Array], Float32Array]:
+    half_size, remainder = divmod(diffusion_kernel.shape[0], 2)
+    assert (
+        diffusion_kernel.ndim == 2
+        and diffusion_kernel.shape[0] == diffusion_kernel.shape[1]
+        and remainder == 1
+    )
+
+    @nb.stencil()
+    def diffusor(pheromone_trail: Float32Array) -> float:
+        assert pheromone_trail.ndim == 2
+
+        val = 0.0
+        for i in range(-half_size, half_size + 1):
+            for j in range(-half_size, half_size + 1):
+                val += pheromone_trail[i, j] * diffusion_kernel[i, j]
+
+        return val
+
+    return diffusor
+
+
+@nb.stencil(neighborhood=((-2, 3), (-2, 3)))
+def diffusor(pheromone_trail: Float32Array) -> float:
+    # print(pheromone_trail.ndim)
+    # assert pheromone_trail.ndim == 2
+
+    val = 0.0
+    for i in range(-2, 3):
+        for j in range(-2, 3):
+            val += pheromone_trail[i, j] / 25
+
+    return val
+
+
+@nb.njit(parallel=True, cache=True)
+def apply_diffusion(
+    pheromone_trails: Float32Array,
+    # diffusion_stencil: Callable[[Float32Array], Float32Array],
+) -> Float32Array:
+    assert pheromone_trails.ndim == 3
+
+    for i in nb.prange(pheromone_trails.shape[0]):
+        pheromone_trails[i, :, :] = diffusor(pheromone_trails[i])
+
+    return pheromone_trails
 
 
 def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: int = 0):
@@ -266,6 +319,7 @@ def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: in
 
     # Pad the diffusion kernel to match the pheromone_trails shape.
     diffusion_kernel = config.DIFFUSION_KERNEL
+    # diffusor = create_diffusion_stencil(config.DIFFUSION_KERNEL)
     sz = (
         pheromone_trails.shape[-1] - diffusion_kernel.shape[0],
         pheromone_trails.shape[-2] - diffusion_kernel.shape[1],
@@ -286,7 +340,8 @@ def run(nb_agents: int, *, sim_width: int = 800, sim_height: int = 800, seed: in
             agents,
             pheromone_trails,
             np.float32(dt),
-            padded_diffusion_kernel=diffusion_kernel,
+            # padded_diffusion_kernel=diffusion_kernel,
+            # diffusion_stencil=diffusor,
             species_list=config.SPECIES,
             evaporation_speed=np.float32(config.EVAPORATION_SPEED),
         )
