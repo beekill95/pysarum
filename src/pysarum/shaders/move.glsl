@@ -2,11 +2,17 @@
 #extension GL_ARB_shading_language_include : require
 #include "./agent.glsl"
 
-layout(local_size_x=1) in;
-layout(std430, binding=0) readonly buffer SpeciesList { Species species[]; };
-layout(std430, binding=1) buffer Agents { Agent agents[]; };
-layout(r32f, binding=2) readonly image3D in_trails;
-layout(r32f, binding=3) writeonly image3D out_trails;
+#define NEG_INF -3.40282347e+38
+
+layout(local_size_x = 1) in;
+layout(std430, binding = 0) readonly buffer SpeciesList {
+    Species species[];
+};
+layout(std430, binding = 1) buffer Agents {
+    Agent agents[];
+};
+layout(r32f, binding = 2) readonly image3D in_trails;
+layout(r32f, binding = 3) writeonly image3D out_trails;
 
 uniform float dt;
 
@@ -15,21 +21,55 @@ float random(vec2 seed) {
     return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-float sense(uint agent_idx, float direction) {}
+float sense(uint agent_idx, float direction) {
+    ivec3 trails_size = imageSize(in_trails);
+
+    uint species_idx = agent_idx[agent_idx].species;
+    float sensor_angle = species[species_idx].sensor_angle;
+    vec2 sensor_loc = agents[agent_idx].location + vec2(cos(sensor_angle), sin(sensor_angle)) * species[species_idx].sensor_distance;
+
+    vec2 sensoring_topleft = sensor_loc - float(species[species_idx].sensor_size) / 2.0;
+    vec2 sensoring_botright = sensor_loc + float(species[species_idx].sensor_size) / 2.0;
+
+    // If the sensoring area is outside the trails region, return minus infinity.
+    if (sensoring_botright.x < 0
+            || sensoring_botright.y < 0
+            || sensoring_topleft.x >= trails_size.x
+            || sensoring_topleft.y >= trails_size.y) {
+        return NEG_INF;
+    }
+
+    float species_pheromone = 0.0;
+    float other_pheromone = 0.0;
+
+    float species_pheromone_cnt = 0.0;
+    float other_pheromone_cnt = 0.0;
+
+    // Calculating the strength of the species's pheromones and the other species' pheromones.
+    // Remember to handle the out of region cases.
+    // TODO
+
+    return species_pheromone / species_pheromone_cnt - other_pheromone / other_pheromone_cnt;
+}
 
 float steer(uint agent_idx) {
     // Determine whether to keep the current direction (return 0),
     // turning right (return 1), or turning left (return -1).
     uint species_idx = agents.species;
-    float left_sensor = steer(agent_idx, direction + species[species_idx].sensor_angle)
-    float front_sensor = steer(agent_idx, direction)
-    float right_sensor = steer(agent_idx, direction - species[species_idx].sensor_angle)
+    float left_sensor = sense(agent_idx, direction + species[species_idx].sensor_angle)
+    float front_sensor = sense(agent_idx, direction)
+    float right_sensor = sense(agent_idx, direction - species[species_idx].sensor_angle)
 
     if (front_sensor < left_sensor && front_sensor < right_sensor) {
         float value = random(vec2(float(agent_idx), dt));
-        // TODO
+        return float(round(value));
     }
-    // TODO
+
+    if (front_sensor < left_sensor) {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
 }
 
 void main() {
@@ -38,7 +78,7 @@ void main() {
 
     // Determine whether the agent will turn to different directions?
     float turn = steer(agent_idx);
-    float new_direction = agents[agent_idx].direction +  turn * agents[agent_idx].turn_angle;
+    float new_direction = agents[agent_idx].direction + turn * agents[agent_idx].turn_angle;
 
     // Caculate the agent's new position.
     vec2 new_location = agents[agent_idx].location + dt * agents[agent_idx].speed;
