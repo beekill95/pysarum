@@ -47,7 +47,23 @@ float sense(uint agent_idx, float direction) {
 
     // Calculating the strength of the species's pheromones and the other species' pheromones.
     // Remember to handle the out of region cases.
-    // TODO
+    for (int i = int(sensoring_topleft.x); i < int(sensoring_botright.x); i++) {
+        for (int j = int(sensoring_topleft.y); j < int(sensoring_botright.y); j++) {
+            if (i < 0 || j < 0 || i >= trails_size.x || j >= trails_size.y) {
+                continue;
+            }
+
+            species_pheromone += imageLoad(in_trails, ivec3(i, j, species_idx)).r;
+            species_pheromone_cnt += 1.0;
+
+            for (int z = 0; z < trails_size.z; z++) {
+                if (z != species_idx) {
+                    other_pheromone += imageLoad(in_trails, ivec3(i, j, z)).r;
+                    other_pheromone_cnt += 1.0;
+                }
+            }
+        }
+    }
 
     return species_pheromone / species_pheromone_cnt - other_pheromone / other_pheromone_cnt;
 }
