@@ -15,5 +15,5 @@ struct Species {
     uint sensor_distance;
     float sensor_angle;
 
-    vec3 color;
+    vec4 color;
 };
