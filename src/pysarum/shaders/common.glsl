@@ -1,3 +1,6 @@
+#define NEG_INF -3.40282347e+38
+#define PI 3.14159265359
+
 struct Agent {
     vec2 location;
     float direction;

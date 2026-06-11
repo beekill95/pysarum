@@ -1,8 +1,6 @@
 #version 430
 #extension GL_ARB_shading_language_include : require
-#include "./agent.glsl"
-
-#define NEG_INF -3.40282347e+38
+#include "./common.glsl"
 
 layout(local_size_x = 1) in;
 layout(std430, binding = 0) readonly buffer SpeciesList {
@@ -16,9 +14,14 @@ layout(r32f, binding = 3) writeonly image3D out_trails;
 
 uniform float dt;
 
-float random(vec2 seed) {
+float random(out vec2 seed) {
     // Pseudo random generator from Google AI.
-    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
+    float result = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
+
+    // TODO: Generate a new seed.
+    seed += 1.0;
+
+    return result;
 }
 
 float sense(uint agent_idx, float direction) {
@@ -90,20 +93,51 @@ float steer(uint agent_idx) {
 
 void main() {
     uint agent_idx = gl_GlobalInvocationID.x;
+    Agent agent = agents[agent_idx];
     vec2 random_seed = vec2(float(agent_idx), dt);
+    ivec3 trails_size = imageSize(in_trails)
 
     // Determine whether the agent will turn to different directions?
     float turn = steer(agent_idx);
-    float new_direction = agents[agent_idx].direction + turn * agents[agent_idx].turn_angle;
+    float new_direction = agent.direction + turn * agent.turn_angle;
 
     // Caculate the agent's new position.
-    vec2 new_location = agents[agent_idx].location + dt * agents[agent_idx].speed;
+    vec2 new_location = agent.location + dt * agent.speed;
 
     // Make sure the new location is within the trails, if not, move the agent in a random direction.
-    // TODO
+    if (new_location.x >= trails_size.x || new_location.x <= 0) {
+        float random_angle = random(random_seed) * PI;
 
-    // Mark the trails.
-    // TODO
+        if (new_location.x <= 0) {
+            new_location.x = 0;
+            new_direction = random_angle - PI / 2.0;
+        } else {
+            new_location.x = trails_size.x - 1;
+            new_direction = random_angle + PI / 2.0;
+        }
+    }
+
+    if (new_location.y >= trails_size.y || new_location.y <= 0) {
+        float random_angle = random(random_seed) * PI;
+
+        if (new_location.y <= 0) {
+            new_location.y = 0;
+            new_direction = random_angle;
+        } else {
+            new_location.y = trails_size.y - 1;
+            new_direction = random_angle + PI;
+        }
+    }
+
+    // Mark the trails with pheromone.
+    vec2 diff = new_location - agent.location;
+    vec2 distance = abs(diff);
+    uint nb_steps = uint(ceil(max(distance.x, distance.y)));
+    float step = diff / float(nb_steps);
+    for (uint i = 0; i < nb_steps; i++) {
+        ivec2 xy = ivec2(agent.location + float(i) * step);
+        imageStore(out_trails, ivec3(xy, agent.species), vec4(1.0));
+    }
 
     // Update the agent's location and current direction.
     agents[agent_idx].direction = new_direction;
