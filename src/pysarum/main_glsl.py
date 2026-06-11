@@ -1,19 +1,47 @@
 from __future__ import annotations
 
+import os
+
 import moderngl
 import pyray as pr
 
-SHADER_SOURCE = """\
-#version 430
-layout(local_size_x=16, local_size_y=16) in;
-layout(rgba32f, binding=0) uniform image2D dest_tex;
+SHADERS_ROOT = os.path.join(os.path.dirname(__file__), "shaders")
 
-void main() {
-    ivec2 texel_pos = ivec2(gl_GlobalInvocationID.xy);
-    vec4 color = vec4(float(texel_pos.x)/800.0, float(texel_pos.y)/600.0, 1.0, 1.0);
-    imageStore(dest_tex, texel_pos, color);
-}
-"""
+
+def load_shader_source(shader_name: str) -> str:
+    """
+    This helper function will load the shader source code from the given path.
+    Additionally, it will replace the `#include` directive with the source of the file in the given path.
+    Note, this doesn't recursively replace `#include` directive in the included file.
+
+    Parameters:
+        path: path to the given shader source to load.
+
+    Returns:
+        the source with `#include` directive replaced.
+
+    Raise:
+        FileNotFound error if either the given path or the paths in the `#include` directive not found.
+    """
+    path = os.path.join(SHADERS_ROOT, shader_name)
+    root = os.path.dirname(path)
+
+    with open(path) as infile:
+        lines = infile.readlines()
+
+    preprocessed: list[str] = []
+    for line in lines:
+        if line.startswith("#include"):
+            line = line.rstrip()
+            assert line[-1] == '"', "Doesn't support complex include directive"
+            include_path = line[10:-1]
+
+            with open(os.path.join(root, include_path)) as infile:
+                preprocessed.extend(infile.readlines())
+        else:
+            preprocessed.append(line)
+
+    return "".join(preprocessed)
 
 
 def run():
@@ -23,7 +51,7 @@ def run():
     ctx = moderngl.create_context()
 
     # 2. Define Compute Shader
-    compute_shader = ctx.compute_shader(SHADER_SOURCE)
+    compute_shader = ctx.compute_shader(load_shader_source(os.path.join()))
 
     # 3. Create a Texture for ModernGL to write to
     # We use a buffer that Raylib can also see

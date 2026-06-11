@@ -1,5 +1,4 @@
 #version 430
-#extension GL_ARB_shading_language_include : require
 #include "./common.glsl"
 
 layout(local_size_x = 1) in;
