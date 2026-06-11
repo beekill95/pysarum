@@ -5,6 +5,9 @@ import os
 import moderngl
 import pyray as pr
 
+
+from . import config
+
 SHADERS_ROOT = os.path.join(os.path.dirname(__file__), "shaders")
 
 
@@ -46,37 +49,49 @@ def load_shader_source(shader_name: str) -> str:
 
 def run():
     # TODO: just testing that compute shader works with raylib.
-    pr.init_window(800, 600, "Compute Shader Test")
+    WIDTH, HEIGHT = 800, 600
+    pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
 
     ctx = moderngl.create_context()
 
     # 2. Define Compute Shader
-    compute_shader = ctx.compute_shader(load_shader_source(os.path.join()))
+    compute_shader = ctx.compute_shader(load_shader_source("move.glsl"))
 
     # 3. Create a Texture for ModernGL to write to
     # We use a buffer that Raylib can also see
-    mgl_texture = ctx.texture((800, 600), 4, dtype="f1")
-    mgl_texture.bind_to_image(0, read=False, write=True)
+    pheromone_trails_in = ctx.texture3d(
+        (WIDTH, HEIGHT, len(config.SPECIES)), components=1, dtype="f4"
+    )
+    pheromone_trails_out = ctx.texture3d(
+        (WIDTH, HEIGHT, len(config.SPECIES)), components=1, dtype="f4"
+    )
+    pheromone_trails_img = ctx.texture((WIDTH, HEIGHT), components=4, dtype="f4")
+
+    pheromone_trails_in.bind_to_image(unit=2, read=True, write=False, level=0)
+    pheromone_trails_out.bind_to_image(unit=3, read=True, write=True, level=0)
+    pheromone_trails_img.bind_to_image(unit=4, read=True, write=True, level=0)
 
     # pr_tex = pr.load_texture_from_image(pr.gen_image_color(800, 600, pr.BLANK))
 
     # 2. Get the underlying OpenGL Texture ID (The handle)
-    texture_id = mgl_texture.glo
-
     # 3. Create a Raylib Texture2D manually
     # We are 'lying' to Raylib and telling it to use the ID
     # that ModernGL already created.
     shared_tex = pr.Texture()
-    shared_tex.id = texture_id
-    shared_tex.width = 800
-    shared_tex.height = 600
+    shared_tex.id = pheromone_trails_img.glo
+    shared_tex.width = WIDTH
+    shared_tex.height = HEIGHT
     shared_tex.mipmaps = 1
     shared_tex.format = pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 
     # 4. Main Loop
     while not pr.window_should_close():
         # Dispatch Compute Shader
-        compute_shader.run(800 // 16, 600 // 16)
+        # compute_shader.run(800 // 16, 600 // 16)
+
+        # TODO: run the compute shader.
+
+        # TODO: run another compute shader to output the texture2d for raylib.
 
         # No need these two steps since we've configured raylib to read from moderngl's texture
         # 2. Get the data from ModernGL texture (as bytes)
