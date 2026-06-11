@@ -95,6 +95,7 @@ def run():
 
     # 2. Define Compute Shaders.
     compute_shader = ctx.compute_shader(load_shader_source("move.glsl"))
+    visualize_shader = ctx.compute_shader(load_shader_source("visualize.glsl"))
 
     # 3. Create data structures and bind to GPU.
     # Convert species to buffer.
@@ -152,25 +153,25 @@ def run():
         # Dispatch Compute Shader
         compute_shader.run(WIDTH // 16, HEIGHT // 16)
 
-        # TODO: run the compute shader.
+        # Wait for the shader to complete.
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
-        # TODO: run another compute shader to output the texture2d for raylib.
+        # Shader to visualize the result.
+        visualize_shader.run(WIDTH // 16, HEIGHT // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
-        # No need these two steps since we've configured raylib to read from moderngl's texture
-        # 2. Get the data from ModernGL texture (as bytes)
-        # pixels = mgl_texture.read(alignment=1)
-        # c_pixel_data = (ctypes.c_ubyte * len(pixels)).from_buffer_copy(pixels)
-
-        # 3. Update the Raylib texture with these new pixels
-        # pr.update_texture(pr_tex, pr.ffi.new("unsigned char []", pixels))
-
-        #
-        # pr.glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)
-
-        # 4. Render
+        # Render.
         pr.begin_drawing()
         pr.clear_background(pr.BLACK)
         pr.draw_texture(shared_tex, 0, 0, pr.WHITE)
         pr.end_drawing()
+
+        # Switch buffer.
+        pheromone_trails_in, pheromone_trails_out = (
+            pheromone_trails_out,
+            pheromone_trails_in,
+        )
+        pheromone_trails_in.bind_to_image(unit=2, read=True, write=False, level=0)
+        pheromone_trails_out.bind_to_image(unit=3, read=True, write=True, level=0)
 
     pr.close_window()

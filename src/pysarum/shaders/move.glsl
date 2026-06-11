@@ -8,8 +8,8 @@ layout(std430, binding = 0) readonly buffer SpeciesList {
 layout(std430, binding = 1) buffer Agents {
     Agent agents[];
 };
-layout(r32f, binding = 2) readonly image3D in_trails;
-layout(r32f, binding = 3) writeonly image3D out_trails;
+layout(r32f, binding = 2) uniform readonly image3D in_trails;
+layout(r32f, binding = 3) uniform writeonly image3D out_trails;
 
 uniform float dt;
 
@@ -74,9 +74,9 @@ float steer(uint agent_idx) {
     // Determine whether to keep the current direction (return 0),
     // turning right (return 1), or turning left (return -1).
     uint species_idx = agents.species;
-    float left_sensor = sense(agent_idx, direction + species[species_idx].sensor_angle)
-    float front_sensor = sense(agent_idx, direction)
-    float right_sensor = sense(agent_idx, direction - species[species_idx].sensor_angle)
+    float left_sensor = sense(agent_idx, direction + species[species_idx].sensor_angle);
+    float front_sensor = sense(agent_idx, direction);
+    float right_sensor = sense(agent_idx, direction - species[species_idx].sensor_angle);
 
     if (front_sensor < left_sensor && front_sensor < right_sensor) {
         float value = random(vec2(float(agent_idx), dt));
@@ -94,7 +94,7 @@ void main() {
     uint agent_idx = gl_GlobalInvocationID.x;
     Agent agent = agents[agent_idx];
     vec2 random_seed = vec2(float(agent_idx), dt);
-    ivec3 trails_size = imageSize(in_trails)
+    ivec3 trails_size = imageSize(in_trails);
 
     // Determine whether the agent will turn to different directions?
     float turn = steer(agent_idx);
