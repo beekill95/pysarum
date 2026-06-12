@@ -69,7 +69,7 @@ float sense(uint agent_idx, float direction) {
     return species_pheromone / species_pheromone_cnt - other_pheromone / other_pheromone_cnt;
 }
 
-float steer(uint agent_idx) {
+float steer(uint agent_idx, out vec2 random_seed) {
     // Determine whether to keep the current direction (return 0),
     // turning right (return 1), or turning left (return -1).
     uint species_idx = agents[agent_idx].species;
@@ -79,7 +79,7 @@ float steer(uint agent_idx) {
     float right_sensor = sense(agent_idx, direction - species[species_idx].sensor_angle);
 
     if (front_sensor < left_sensor && front_sensor < right_sensor) {
-        float value = random(vec2(float(agent_idx), dt));
+        float value = random(random_seed);
         return float(round(value)) * 2.0 - 1.0;
     }
 
@@ -101,7 +101,7 @@ void main() {
     ivec3 trails_size = imageSize(in_trails);
 
     // Determine whether the agent will turn to different directions?
-    float turn = steer(agent_idx);
+    float turn = steer(agent_idx, random_seed);
     float new_direction = agent.direction + turn * species[agent.species].turn_angle;
 
     // Caculate the agent's new position.
