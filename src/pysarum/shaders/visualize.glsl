@@ -25,7 +25,6 @@ void main() {
 
     // Normalizing the alpha channel.
     color.a /= float(trails_size.z);
-    // color.a = 1.0;
 
     // Set the color to the output image.
     imageStore(out_img, ivec2(loc), color);

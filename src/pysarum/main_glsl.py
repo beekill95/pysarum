@@ -99,14 +99,20 @@ def generate_random_agents(
 
 def run():
     # TODO: just testing that compute shader works with raylib.
-    WIDTH, HEIGHT = 1200, 1200
+    WIDTH, HEIGHT = 400, 400
     pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
 
     ctx = moderngl.create_context(require=430)
 
     # 2. Define Compute Shaders.
     compute_shader = ctx.compute_shader(load_shader_source("move.glsl"))
+
+    evaporate_shader = ctx.compute_shader(load_shader_source("evaporate.glsl"))
+    evaporate_shader["evaporation_speed"].value = config.EVAPORATION_SPEED
+
     visualize_shader = ctx.compute_shader(load_shader_source("visualize.glsl"))
+
+    # Set shaders' uniforms.
 
     # 3. Create data structures and bind to GPU.
     # Convert species to buffer.
@@ -169,8 +175,11 @@ def run():
         # Dispatch Compute Shader
         compute_shader["dt"].value = dt
         compute_shader.run(config.NB_AGENTS // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
-        # Wait for the shader to complete.
+        # Dispatch evaporate shader.
+        evaporate_shader["dt"].value = dt
+        evaporate_shader.run(WIDTH // 16, HEIGHT // 16)
         ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
         # Shader to visualize the result.
