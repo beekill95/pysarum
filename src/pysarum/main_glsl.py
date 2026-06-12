@@ -102,7 +102,7 @@ def run():
     WIDTH, HEIGHT = 1200, 1200
     pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
 
-    ctx = moderngl.create_context()
+    ctx = moderngl.create_context(require=430)
 
     # 2. Define Compute Shaders.
     compute_shader = ctx.compute_shader(load_shader_source("move.glsl"))
@@ -159,6 +159,9 @@ def run():
     shared_tex.mipmaps = 1
     shared_tex.format = pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
 
+    # A temp buffer for copying.
+    cp_buffer = ctx.buffer(reserve=WIDTH * HEIGHT * len(config.SPECIES) * 4)
+
     # 5. Main Loop
     while not pr.window_should_close():
         dt = pr.get_frame_time()
@@ -190,5 +193,9 @@ def run():
         )
         pheromone_trails_in.bind_to_image(unit=2, read=True, write=False, level=0)
         pheromone_trails_out.bind_to_image(unit=3, read=True, write=True, level=0)
+
+        # Copy the buffer.
+        pheromone_trails_in.read_into(cp_buffer)
+        pheromone_trails_out.write(cp_buffer)
 
     pr.close_window()
