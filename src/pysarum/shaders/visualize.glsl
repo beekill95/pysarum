@@ -1,7 +1,7 @@
 #version 430
 #include "common.glsl"
 
-layout(local_size_x = 1, local_size_y = 1) in;
+layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) readonly buffer SpeciesList {
     Species species[];
@@ -11,7 +11,7 @@ layout(r32f, binding = 3) uniform image3D in_trails;
 layout(rgba32f, binding = 4) uniform image2D out_img;
 
 void main() {
-    ivec2 loc = gl_GlobalInvocationID.xy;
+    uvec2 loc = gl_GlobalInvocationID.xy;
     ivec3 trails_size = imageSize(in_trails);
 
     if (loc.x >= trails_size.x || loc.y >= trails_size.y) {
@@ -25,7 +25,8 @@ void main() {
 
     // Normalizing the alpha channel.
     color.a /= float(trails_size.z);
+    // color.a = 1.0;
 
     // Set the color to the output image.
-    imageStore(out_img, loc, color);
+    imageStore(out_img, ivec2(loc), color);
 }

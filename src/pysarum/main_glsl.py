@@ -16,22 +16,33 @@ SHADERS_ROOT = os.path.join(os.path.dirname(__file__), "shaders")
 
 AgentDtype = np.dtype(
     [
-        ("location", "f4", (2,)),
-        ("direction", "f4"),
-        ("species", "u4"),
+        ("location", np.float32, (2,)),
+        ("direction", np.float32),
+        ("species", np.uint32),
     ],
     align=True,
 )
 SpeciesDtype = np.dtype(
-    [
-        ("speed", "f4"),
-        ("turn_angle", "f4"),
-        ("sensor_size", "u4"),
-        ("sensor_distance", "u4"),
-        ("sensor_angle", "u4"),
-        ("color", "f4", (4,)),
-    ],
-    align=True,
+    {
+        "names": [
+            "speed",
+            "turn_angle",
+            "sensor_size",
+            "sensor_distance",
+            "sensor_angle",
+            "color",
+        ],
+        "formats": [
+            np.float32,
+            np.float32,
+            np.uint32,
+            np.uint32,
+            np.float32,
+            (np.float32, 4),
+        ],
+        "offsets": [0, 4, 8, 12, 16, 32],
+        "itemsize": 48,
+    }
 )
 
 
@@ -79,16 +90,16 @@ def generate_random_agents(
     agents = np.zeros(nb_agents, dtype=AgentDtype)
 
     for i in range(nb_agents):
-        agents[i].location = np.array([world_width / 2.0, world_height / 2.0])
-        agents[i].direction = random.random() * 2 * math.pi
-        agents[i].species = random.randint(0, nb_species - 1)
+        agents[i]["location"] = np.array([world_width / 2.0, world_height / 2.0])
+        agents[i]["direction"] = random.random() * 2 * math.pi
+        agents[i]["species"] = random.randint(0, nb_species - 1)
 
     return agents
 
 
 def run():
     # TODO: just testing that compute shader works with raylib.
-    WIDTH, HEIGHT = 800, 600
+    WIDTH, HEIGHT = 1200, 1200
     pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
 
     ctx = moderngl.create_context()
@@ -101,12 +112,12 @@ def run():
     # Convert species to buffer.
     species_arr = np.zeros(len(config.SPECIES), dtype=SpeciesDtype)
     for i, species in enumerate(config.SPECIES):
-        species_arr[i].speed = species.speed
-        species_arr[i].turn_angle = species.turn_angle
-        species_arr[i].sensor_size = species.sensor_size
-        species_arr[i].sensor_distance = species.sensor_distance
-        species_arr[i].sensor_angle = species.sensor_angle
-        species_arr[i].color = (
+        species_arr[i]["speed"] = species.speed
+        species_arr[i]["turn_angle"] = species.turn_angle
+        species_arr[i]["sensor_size"] = species.sensor_size
+        species_arr[i]["sensor_distance"] = species.sensor_distance
+        species_arr[i]["sensor_angle"] = species.sensor_angle
+        species_arr[i]["color"] = (
             np.array(species.color + (255,), dtype=np.float32) / 255.0
         )
 
@@ -146,19 +157,25 @@ def run():
     shared_tex.width = WIDTH
     shared_tex.height = HEIGHT
     shared_tex.mipmaps = 1
-    shared_tex.format = pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+    shared_tex.format = pr.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
 
     # 5. Main Loop
     while not pr.window_should_close():
+        dt = pr.get_frame_time()
+
         # Dispatch Compute Shader
-        compute_shader.run(WIDTH // 16, HEIGHT // 16)
+        compute_shader["dt"].value = dt
+        compute_shader.run(config.NB_AGENTS // 16)
 
         # Wait for the shader to complete.
         ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
         # Shader to visualize the result.
         visualize_shader.run(WIDTH // 16, HEIGHT // 16)
-        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
+        ctx.memory_barrier(
+            moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT
+            | moderngl.TEXTURE_FETCH_BARRIER_BIT
+        )
 
         # Render.
         pr.begin_drawing()

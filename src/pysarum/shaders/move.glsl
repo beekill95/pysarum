@@ -1,7 +1,7 @@
 #version 430
 #include "./common.glsl"
 
-layout(local_size_x = 1) in;
+layout(local_size_x = 16) in;
 layout(std430, binding = 0) readonly buffer SpeciesList {
     Species species[];
 };
@@ -26,9 +26,8 @@ float random(out vec2 seed) {
 float sense(uint agent_idx, float direction) {
     ivec3 trails_size = imageSize(in_trails);
 
-    uint species_idx = agent_idx[agent_idx].species;
-    float sensor_angle = species[species_idx].sensor_angle;
-    vec2 sensor_loc = agents[agent_idx].location + vec2(cos(sensor_angle), sin(sensor_angle)) * species[species_idx].sensor_distance;
+    uint species_idx = agents[agent_idx].species;
+    vec2 sensor_loc = agents[agent_idx].location + vec2(cos(direction), sin(direction)) * species[species_idx].sensor_distance;
 
     vec2 sensoring_topleft = sensor_loc - float(species[species_idx].sensor_size) / 2.0;
     vec2 sensoring_botright = sensor_loc + float(species[species_idx].sensor_size) / 2.0;
@@ -73,21 +72,26 @@ float sense(uint agent_idx, float direction) {
 float steer(uint agent_idx) {
     // Determine whether to keep the current direction (return 0),
     // turning right (return 1), or turning left (return -1).
-    uint species_idx = agents.species;
+    uint species_idx = agents[agent_idx].species;
+    float direction = agents[agent_idx].direction;
     float left_sensor = sense(agent_idx, direction + species[species_idx].sensor_angle);
     float front_sensor = sense(agent_idx, direction);
     float right_sensor = sense(agent_idx, direction - species[species_idx].sensor_angle);
 
     if (front_sensor < left_sensor && front_sensor < right_sensor) {
         float value = random(vec2(float(agent_idx), dt));
-        return float(round(value));
+        return float(round(value)) * 2.0 - 1.0;
     }
 
     if (front_sensor < left_sensor) {
         return 1.0;
-    } else {
+    }
+
+    if (front_sensor < right_sensor) {
         return -1.0;
     }
+
+    return 0.0;
 }
 
 void main() {
@@ -98,10 +102,10 @@ void main() {
 
     // Determine whether the agent will turn to different directions?
     float turn = steer(agent_idx);
-    float new_direction = agent.direction + turn * agent.turn_angle;
+    float new_direction = agent.direction + turn * species[agent.species].turn_angle;
 
     // Caculate the agent's new position.
-    vec2 new_location = agent.location + dt * agent.speed;
+    vec2 new_location = agent.location + dt * vec2(cos(new_direction), sin(new_direction)) * species[agent.species].speed;
 
     // Make sure the new location is within the trails, if not, move the agent in a random direction.
     if (new_location.x >= trails_size.x || new_location.x <= 0) {
@@ -132,7 +136,7 @@ void main() {
     vec2 diff = new_location - agent.location;
     vec2 distance = abs(diff);
     uint nb_steps = uint(ceil(max(distance.x, distance.y)));
-    float step = diff / float(nb_steps);
+    vec2 step = diff / float(nb_steps);
     for (uint i = 0; i < nb_steps; i++) {
         ivec2 xy = ivec2(agent.location + float(i) * step);
         imageStore(out_trails, ivec3(xy, agent.species), vec4(1.0));
