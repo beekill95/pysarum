@@ -9,7 +9,6 @@ import numpy as np
 import numpy.typing as npt
 import pyray as pr
 
-
 from . import config
 
 SHADERS_ROOT = os.path.join(os.path.dirname(__file__), "shaders")
@@ -99,7 +98,7 @@ def generate_random_agents(
 
 def run():
     # TODO: just testing that compute shader works with raylib.
-    WIDTH, HEIGHT = 400, 400
+    WIDTH, HEIGHT = 1200, 1200
     pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
 
     ctx = moderngl.create_context(require=430)
@@ -109,6 +108,9 @@ def run():
 
     evaporate_shader = ctx.compute_shader(load_shader_source("evaporate.glsl"))
     evaporate_shader["evaporation_speed"].value = config.EVAPORATION_SPEED
+
+    diffuse_shader = ctx.compute_shader(load_shader_source("diffuse.glsl"))
+    diffuse_shader["kernel_size"].value = config.DIFFUSION_RADIUS
 
     visualize_shader = ctx.compute_shader(load_shader_source("visualize.glsl"))
 
@@ -180,6 +182,10 @@ def run():
         # Dispatch evaporate shader.
         evaporate_shader["dt"].value = dt
         evaporate_shader.run(WIDTH // 16, HEIGHT // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
+
+        # Dispatch diffuse shader.
+        diffuse_shader.run(WIDTH // 16, HEIGHT // 16)
         ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
 
         # Shader to visualize the result.
