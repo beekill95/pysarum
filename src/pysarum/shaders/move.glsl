@@ -13,13 +13,10 @@ layout(r32f, binding = 3) uniform writeonly image3D out_trails;
 
 uniform float dt;
 
-float random(out vec2 seed) {
+float random(inout vec2 seed) {
     // Pseudo random generator from Google AI.
     float result = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
-
-    // TODO: Generate a new seed.
-    seed += 1.0;
-
+    seed = fract(seed * 1.61803398875);
     return result;
 }
 
@@ -66,10 +63,18 @@ float sense(uint agent_idx, float direction) {
         }
     }
 
-    return species_pheromone / species_pheromone_cnt - other_pheromone / other_pheromone_cnt;
+    if (species_pheromone_cnt > 0.0 && other_pheromone_cnt > 0.0) {
+        return species_pheromone / species_pheromone_cnt - other_pheromone / other_pheromone_cnt;
+    } else if (species_pheromone_cnt > 0.0) {
+        return species_pheromone / species_pheromone_cnt;
+    } else if (other_pheromone_cnt > 0.0) {
+        return -other_pheromone / other_pheromone_cnt;
+    }
+
+    return NEG_INF;
 }
 
-float steer(uint agent_idx, out vec2 random_seed) {
+float steer(uint agent_idx, inout vec2 random_seed) {
     // Determine whether to keep the current direction (return 0),
     // turning right (return 1), or turning left (return -1).
     uint species_idx = agents[agent_idx].species;
@@ -108,6 +113,7 @@ void main() {
     vec2 new_location = agent.location + dt * vec2(cos(new_direction), sin(new_direction)) * species[agent.species].speed;
 
     // Make sure the new location is within the trails, if not, move the agent in a random direction.
+    // TODO: the new direction assignment might not be correct!
     if (new_location.x >= trails_size.x || new_location.x <= 0) {
         float random_angle = random(random_seed) * PI;
 
