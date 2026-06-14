@@ -5,6 +5,7 @@ import os
 import random
 
 import moderngl
+import moderngl_window as mglw
 import numpy as np
 import numpy.typing as npt
 import pyray as pr
@@ -96,10 +97,168 @@ def generate_random_agents(
     return agents
 
 
+class Window(mglw.WindowConfig):
+    gl_version = (4,3)
+    window_size = (800, 800)
+    
+    def __init__(self,  **kwargs):
+        super().__init__(**kwargs)
+
+        ctx = self.ctx
+        self._init_shaders(ctx)
+        self._init_buffers(ctx, self.wnd.size)
+        self._init_textures(ctx, self.wnd.size)
+
+        # A simple OpenGL to render our trails image.
+        self.prog = self.ctx.program(
+            vertex_shader="""
+                #version 430
+                in vec2 in_vert;
+                in vec2 in_texcoord;
+                out vec2 v_texcoord;
+                void main() {
+                    gl_Position = vec4(in_vert, 0.0, 1.0);
+                    v_texcoord = in_texcoord;
+                }
+            """,
+            fragment_shader="""
+                #version 430
+                uniform sampler2D u_texture;
+                in vec2 v_texcoord;
+                out vec4 f_color;
+                void main() {
+                    f_color = texture(u_texture, v_texcoord);
+                }
+            """
+        )
+
+        vertices = np.array([
+            -1.0, -1.0, 0.0, 0.0,
+             1.0, -1.0, 1.0, 0.0,
+            -1.0,  1.0, 0.0, 1.0,
+             1.0,  1.0, 1.0, 1.0,
+        ], dtype='f4')
+        
+        self.vbo = self.ctx.buffer(vertices)
+        self.vao = self.ctx.vertex_array(
+            self.prog, 
+            [(self.vbo, '2f 2f', 'in_vert', 'in_texcoord')],
+            mode=moderngl.TRIANGLE_STRIP
+        )
+
+    def _init_shaders(self, ctx: moderngl.Context):
+        self.move_shader = ctx.compute_shader(load_shader_source("move.glsl"))
+
+        self.evaporate_shader = ctx.compute_shader(load_shader_source("evaporate.glsl"))
+        self.evaporate_shader["evaporation_speed"].value = config.EVAPORATION_SPEED
+
+        self.diffuse_shader = ctx.compute_shader(load_shader_source("diffuse.glsl"))
+        self.diffuse_shader["kernel_size"].value = config.DIFFUSION_RADIUS
+
+        self.visualize_shader = ctx.compute_shader(load_shader_source("visualize.glsl"))
+
+    def _init_buffers(self, ctx: moderngl.Context, window_size: tuple[int, int]):
+        species_arr = np.zeros(len(config.SPECIES), dtype=SpeciesDtype)
+        for i, species in enumerate(config.SPECIES):
+            species_arr[i]["speed"] = species.speed
+            species_arr[i]["turn_angle"] = species.turn_angle
+            species_arr[i]["sensor_size"] = species.sensor_size
+            species_arr[i]["sensor_distance"] = species.sensor_distance
+            species_arr[i]["sensor_angle"] = species.sensor_angle
+            species_arr[i]["color"] = (
+                np.array(species.color + (255,), dtype=np.float32) / 255.0
+            )
+
+        self.species_buffer = ctx.buffer(species_arr.tobytes())
+        self.species_buffer.bind_to_storage_buffer(0)
+
+        # Generate random agents.
+        agents = generate_random_agents(
+            nb_agents=config.NB_AGENTS,
+            world_width=window_size[0],
+            world_height=window_size[1],
+            nb_species=len(config.SPECIES),
+        )
+        self.agents_buffer = ctx.buffer(agents.tobytes())
+        self.agents_buffer.bind_to_storage_buffer(1)
+
+        # A temp buffer for copying.
+        self.cp_buffer = ctx.buffer(reserve=window_size[0]  * window_size[1] * len(config.SPECIES) * 4)
+
+    def _init_textures(self, ctx: moderngl.Context, window_size: tuple[int, int]):
+        # In/Out pheromone trails.
+        pheromone_trails_in = ctx.texture3d(
+            (*window_size, len(config.SPECIES)), components=1, dtype="f4"
+        )
+        pheromone_trails_out = ctx.texture3d(
+            (*window_size, len(config.SPECIES)), components=1, dtype="f4"
+        )
+
+        pheromone_trails_in.bind_to_image(unit=2, read=True, write=False, level=0)
+        pheromone_trails_out.bind_to_image(unit=3, read=True, write=True, level=0)
+
+        # 4. Create a Texture for ModernGL to write to
+        # We use a buffer that Raylib can also see
+        pheromone_trails_img = ctx.texture(window_size, components=4, dtype="f4")
+        pheromone_trails_img.bind_to_image(unit=4, read=True, write=True, level=0)
+        pheromone_trails_img.filter = (moderngl.LINEAR, moderngl.LINEAR)
+
+        self.pheromone_trails_in = pheromone_trails_in
+        self.pheromone_trails_out = pheromone_trails_out
+        self.pheromone_trails_img = pheromone_trails_img
+        
+    def on_render(self, time: float, frametime: float):
+        ctx = self.ctx
+        WIDTH, HEIGHT = self.wnd.size
+
+        # Dispatch Compute Shader
+        self.move_shader["dt"].value = frametime
+        self.move_shader.run(config.NB_AGENTS // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
+
+        # Dispatch evaporate shader.
+        self.evaporate_shader["dt"].value = frametime
+        self.evaporate_shader.run(WIDTH // 16, HEIGHT // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
+
+        # Dispatch diffuse shader.
+        self.diffuse_shader.run(WIDTH // 16, HEIGHT // 16)
+        ctx.memory_barrier(moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT)
+
+        # Shader to visualize the result.
+        self.pheromone_trails_img.bind_to_image(unit=4, read=True, write=True, level=0)
+        self.visualize_shader.run(WIDTH // 16, HEIGHT // 16)
+        ctx.memory_barrier(
+            moderngl.SHADER_IMAGE_ACCESS_BARRIER_BIT
+            | moderngl.TEXTURE_FETCH_BARRIER_BIT
+        )
+
+        # Render the visualization texture.
+        self.pheromone_trails_img.use(0)
+        self.prog['u_texture'] = 0
+        self.vao.render()
+
+        # Switch buffer.
+        self.pheromone_trails_in, self.pheromone_trails_out = (
+            self.pheromone_trails_out,
+            self.pheromone_trails_in,
+        )
+        self.pheromone_trails_in.bind_to_image(unit=2, read=True, write=False, level=0)
+        self.pheromone_trails_out.bind_to_image(unit=3, read=True, write=True, level=0)
+
+        # Copy the buffer.
+        self.pheromone_trails_in.read_into(self.cp_buffer)
+        self.pheromone_trails_out.write(self.cp_buffer)
+
 def run():
+    # mglw.run_window_config_instance(Window())
+    mglw.run_window_config(Window, args=["-wnd", "pyglet"])
+
+def run_2():
     # TODO: just testing that compute shader works with raylib.
     WIDTH, HEIGHT = 1200, 1200
     pr.init_window(WIDTH, HEIGHT, "Compute Shader Test")
+    print("Raylib", pr.rl_get_version())
 
     ctx = moderngl.create_context(require=430)
 
